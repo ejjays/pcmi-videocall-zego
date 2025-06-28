@@ -51,15 +51,19 @@ export default function Header({ title = "PCMI", showBackButton = false, backHre
 
         {!showBackButton && (
           <div className="flex items-center space-x-2">
-            <button className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation">
+            <Link
+              href="/chat-app"
+              className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation"
+            >
               <Image
                 src="/chats.svg"
                 alt="Chat"
                 width={28}
                 height={28}
                 className="w-7 h-7"
+                style={{ filter: 'none' }}
               />
-            </button>
+            </Link>
             <button
               onClick={handleLogout}
               className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation"
