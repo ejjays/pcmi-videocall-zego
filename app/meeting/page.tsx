@@ -7,6 +7,8 @@ import ProtectedRoute from "@/components/protected-route"
 import MeetingPreparation from "@/components/meeting-preparation"
 import RoomShareModal from "@/components/room-share-modal"
 import CustomReactions from "@/components/custom-reactions"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 import { ZegoUIKitPrebuilt } from "@zegocloud/zego-uikit-prebuilt"
 
 export default function MeetingScreen() {
@@ -26,6 +28,7 @@ export default function MeetingScreen() {
   const [meetingSettings, setMeetingSettings] = useState<{ video: boolean; audio: boolean; mirror: boolean } | null>(
     null,
   )
+  const { animation } = useLoadingAnimation()
 
   useEffect(() => {
     const urlRoomId = searchParams.get("roomId")
@@ -60,13 +63,6 @@ export default function MeetingScreen() {
       applyMirrorEffect()
     }
   }, [isConnected, meetingSettings])
-
-  // 🖼️ CUSTOM AVATAR INJECTION - Force ZegoCloud to show profile pictures
-  // useEffect(() => {
-  //   if (isConnected && user?.photoURL && containerRef.current) {
-  //     injectCustomAvatars()
-  //   }
-  // }, [isConnected, user])
 
   const applyMirrorEffect = () => {
     try {
@@ -106,99 +102,6 @@ export default function MeetingScreen() {
       console.warn("Error applying mirror effect:", error)
     }
   }
-
-  // 🖼️ FORCE CUSTOM AVATARS INTO ZEGOCLOUD
-  // const injectCustomAvatars = () => {
-  //   if (!user?.photoURL || !containerRef.current) return
-
-  //   console.log("🖼️ Injecting custom avatars...")
-
-  //   try {
-  //     // Method 1: Find and replace avatar elements
-  //     const avatarElements = containerRef.current.querySelectorAll(
-  //       '[class*="avatar"], [class*="user"], [class*="participant"], [data-testid*="avatar"], img[src*="avatar"]',
-  //     )
-
-  //     avatarElements.forEach((element) => {
-  //       if (element.tagName === "IMG") {
-  //         const img = element as HTMLImageElement
-  //         if (!img.src.includes(user.photoURL!)) {
-  //           img.src = user.photoURL!
-  //           img.style.width = "80px"
-  //           img.style.height = "80px"
-  //           img.style.borderRadius = "50%"
-  //           img.style.objectFit = "cover"
-  //           console.log("✅ Updated avatar image")
-  //         }
-  //       }
-  //     })
-
-  //     // Method 2: Find elements with background images
-  //     const backgroundElements = containerRef.current.querySelectorAll("*")
-  //     backgroundElements.forEach((element) => {
-  //       const computedStyle = window.getComputedStyle(element)
-  //       if (computedStyle.backgroundImage && computedStyle.backgroundImage !== "none") {
-  //         const htmlElement = element as HTMLElement
-  //         htmlElement.style.backgroundImage = `url(${user.photoURL})`
-  //         htmlElement.style.backgroundSize = "cover"
-  //         htmlElement.style.backgroundPosition = "center"
-  //         console.log("✅ Updated background avatar")
-  //       }
-  //     })
-
-  //     // Method 3: Find text-based avatars (like "C") and replace with images
-  //     const textAvatars = containerRef.current.querySelectorAll("*")
-  //     textAvatars.forEach((element) => {
-  //       if (
-  //         element.textContent?.trim() === user.displayName?.charAt(0)?.toUpperCase() ||
-  //         element.textContent?.trim() === user.email?.charAt(0)?.toUpperCase()
-  //       ) {
-  //         const htmlElement = element as HTMLElement
-  //         // Replace text with image
-  //         htmlElement.innerHTML = `<img src="${user.photoURL}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" alt="Avatar" />`
-  //         console.log("✅ Replaced text avatar with image")
-  //       }
-  //     })
-
-  //     // Method 4: Inject custom CSS to override ZegoCloud avatars
-  //     const customCSS = `
-  //       /* Override ZegoCloud avatar styles */
-  //       [class*="avatar"]:not(:has(img[src*="${user.photoURL}"])) {
-  //         background-image: url(${user.photoURL}) !important;
-  //         background-size: cover !important;
-  //         background-position: center !important;
-  //         background-repeat: no-repeat !important;
-  //       }
-
-  //       /* Make avatars bigger */
-  //       [class*="avatar"], [class*="user-avatar"] {
-  //         min-width: 80px !important;
-  //         min-height: 80px !important;
-  //         width: 80px !important;
-  //         height: 80px !important;
-  //       }
-
-  //       /* Hide text in avatars when we have images */
-  //       [class*="avatar"]:has(img) span,
-  //       [class*="avatar"]:has(img) div {
-  //         display: none !important;
-  //       }
-  //     `
-
-  //     // Inject the CSS
-  //     let styleElement = document.getElementById("custom-avatar-styles")
-  //     if (!styleElement) {
-  //       styleElement = document.createElement("style")
-  //       styleElement.id = "custom-avatar-styles"
-  //       document.head.appendChild(styleElement)
-  //     }
-  //     styleElement.textContent = customCSS
-
-  //     console.log("✅ Custom avatar CSS injected")
-  //   } catch (error) {
-  //     console.warn("Error injecting custom avatars:", error)
-  //   }
-  // }
 
   const initializeZegoCloud = async (settings: { video: boolean; audio: boolean; mirror: boolean }) => {
     // Prevent duplicate initialization
@@ -513,14 +416,7 @@ export default function MeetingScreen() {
   if (!roomId) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <p className="text-white font-medium">Preparing meeting...</p>
-          </div>
-        </div>
+        <PageLoader animationData={animation} size="xl" />
       </ProtectedRoute>
     )
   }
@@ -546,18 +442,9 @@ export default function MeetingScreen() {
             }}
           />
 
-          {/* Loading overlay while connecting */}
+          {/* Professional Blurred Loading overlay while connecting */}
           {(isInitializing || !isConnected) && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </div>
-                <p className="text-white font-medium">
-                  {isInitializing ? "Initializing meeting..." : "Connecting to meeting..."}
-                </p>
-              </div>
-            </div>
+            <PageLoader animationData={animation} size="xl" overlay={true} />
           )}
 
           {/* 🎭 CUSTOM REACTIONS OVERLAY */}

@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react"
 import { Video, VideoOff, Mic, MicOff, Settings, ArrowRight, ArrowLeftRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 
 interface MeetingPreparationProps {
   roomId: string
@@ -20,6 +22,7 @@ export default function MeetingPreparation({ roomId, onJoin, onBack, userName }:
   const [isJoining, setIsJoining] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const { animation } = useLoadingAnimation()
 
   // Initialize camera preview
   useEffect(() => {
@@ -98,6 +101,11 @@ export default function MeetingPreparation({ roomId, onJoin, onBack, userName }:
         <div className="absolute top-20 right-20 w-60 h-60 bg-gradient-to-br from-cyan-500/10 to-purple-600/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 left-20 w-60 h-60 bg-gradient-to-br from-pink-500/10 to-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
+
+      {/* Professional Blurred Loading Overlay for joining */}
+      {isJoining && (
+        <PageLoader animationData={animation} size="xl" overlay={true} />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between p-4 pt-safe-top relative z-10">
@@ -209,8 +217,7 @@ export default function MeetingPreparation({ roomId, onJoin, onBack, userName }:
         >
           {isJoining ? (
             <div className="flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
-              Joining Meeting...
+              <span className="mr-2">Joining Meeting...</span>
             </div>
           ) : (
             <div className="flex items-center justify-center">

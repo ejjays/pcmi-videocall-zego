@@ -5,12 +5,15 @@ import { useState, useEffect } from "react"
 import { Video } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 
 export default function WelcomeScreen() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isNavigating, setIsNavigating] = useState(false)
   const router = useRouter()
   const { user, loading } = useAuth()
+  const { animation } = useLoadingAnimation()
 
   useEffect(() => {
     setIsLoaded(true)
@@ -51,30 +54,12 @@ export default function WelcomeScreen() {
 
   // Show loading while checking auth state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl animate-pulse">
-            <Video className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-white font-medium">Checking authentication...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader animationData={animation} size="xl" />
   }
 
   // Don't show welcome page if user is authenticated
   if (user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-            <Video className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-white font-medium">Redirecting to home...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader animationData={animation} size="xl" />
   }
 
   return (
@@ -85,16 +70,9 @@ export default function WelcomeScreen() {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-pink-500/20 to-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      {/* Loading Overlay */}
+      {/* Professional Blurred Loading Overlay */}
       {isNavigating && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <p className="text-white font-medium">Loading...</p>
-          </div>
-        </div>
+        <PageLoader animationData={animation} size="xl" overlay={true} />
       )}
 
       <div
@@ -118,14 +96,7 @@ export default function WelcomeScreen() {
             disabled={isNavigating}
             className="block w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold py-4 px-8 rounded-2xl shadow-2xl transition-all duration-300 touch-manipulation text-center relative overflow-hidden hover:shadow-3xl active:scale-95 hover:from-cyan-400 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isNavigating ? (
-              <div className="flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Loading...
-              </div>
-            ) : (
-              "Get Started"
-            )}
+            Get Started
           </button>
 
           <button
@@ -133,14 +104,7 @@ export default function WelcomeScreen() {
             disabled={isNavigating}
             className="block w-full bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600/30 text-white font-medium py-3 px-8 rounded-2xl transition-all duration-300 touch-manipulation text-center backdrop-blur-sm hover:from-slate-700 hover:to-slate-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isNavigating ? (
-              <div className="flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Loading...
-              </div>
-            ) : (
-              "Continue as Guest"
-            )}
+            Continue as Guest
           </button>
         </div>
 

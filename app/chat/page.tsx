@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import ProtectedRoute from "@/components/protected-route"
 import Header from "@/components/header"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 import { ZegoUIKitPrebuilt } from "@zegocloud/zego-uikit-prebuilt"
 
 export default function ChatPage() {
@@ -13,6 +15,7 @@ export default function ChatPage() {
   const [isInitializing, setIsInitializing] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string>("")
+  const { animation } = useLoadingAnimation()
 
   useEffect(() => {
     if (containerRef.current && !zegoRef.current && user) {
@@ -184,17 +187,9 @@ export default function ChatPage() {
             }}
           />
 
-          {/* Loading overlay */}
+          {/* Professional Blurred Loading overlay */}
           {isInitializing && (
-            <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center z-50">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </div>
-                <p className="text-white font-medium">Connecting to ZegoCloud Chat...</p>
-                <p className="text-slate-400 text-sm mt-2">Loading built-in messaging features</p>
-              </div>
-            </div>
+            <PageLoader animationData={animation} size="xl" overlay={true} />
           )}
 
           {/* Welcome message for ZegoCloud chat */}

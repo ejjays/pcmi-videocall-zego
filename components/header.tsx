@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Settings, Video } from "lucide-react"
+import { Video } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import Image from "next/image"
 
 interface HeaderProps {
   title?: string
@@ -51,7 +52,13 @@ export default function Header({ title = "PCMI", showBackButton = false, backHre
         {!showBackButton && (
           <div className="flex items-center space-x-2">
             <button className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation">
-              <Settings className="w-6 h-6 text-dark-300" />
+              <Image
+                src="/chats.svg"
+                alt="Chat"
+                width={28}
+                height={28}
+                className="w-7 h-7"
+              />
             </button>
             <button
               onClick={handleLogout}

@@ -4,6 +4,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Header from "@/components/header"
 import { Video, Mic, AlertCircle } from "lucide-react"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 
 export default function JoinMeetingScreen() {
   const [meetingId, setMeetingId] = useState("")
@@ -12,6 +14,7 @@ export default function JoinMeetingScreen() {
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const { animation } = useLoadingAnimation()
 
   const validateMeetingId = (id: string) => {
     // Basic validation for room ID format
@@ -72,6 +75,11 @@ export default function JoinMeetingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 animate-fadeIn">
       <Header title="Join Meeting" showBackButton backHref="/home" />
+
+      {/* Professional Blurred Loading Overlay for joining */}
+      {isJoining && (
+        <PageLoader animationData={animation} size="xl" overlay={true} />
+      )}
 
       <main className="px-4 py-6">
         <div className="max-w-md mx-auto">
@@ -154,14 +162,7 @@ export default function JoinMeetingScreen() {
                 : "bg-slate-700/50 text-slate-400 cursor-not-allowed border border-slate-600/30"
             }`}
           >
-            {isJoining ? (
-              <div className="flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Joining...
-              </div>
-            ) : (
-              "Join Meeting"
-            )}
+            Join Meeting
           </button>
 
           {/* Meeting ID Info */}

@@ -6,6 +6,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Video, Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
 
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true)
@@ -23,6 +25,7 @@ export default function AuthScreen() {
 
   const { signIn, signUp, signInWithGoogle, user, loading } = useAuth()
   const router = useRouter()
+  const { animation } = useLoadingAnimation()
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -114,30 +117,12 @@ export default function AuthScreen() {
 
   // Show loading while checking auth state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl animate-pulse">
-            <Video className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-white font-medium">Checking authentication...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader animationData={animation} size="xl" />
   }
 
-  // Don't show auth page if user is authenticated
+  // Don't show auth page if user is authenticated - show loading while redirecting
   if (user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-            <Video className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-white font-medium">Already authenticated, redirecting...</p>
-        </div>
-      </div>
-    )
+    return <PageLoader animationData={animation} size="xl" />
   }
 
   return (
@@ -147,6 +132,11 @@ export default function AuthScreen() {
         <div className="absolute top-20 right-20 w-60 h-60 bg-gradient-to-br from-cyan-500/10 to-purple-600/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 left-20 w-60 h-60 bg-gradient-to-br from-pink-500/10 to-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
+
+      {/* Professional Blurred Loading Overlay for form submission */}
+      {isLoading && (
+        <PageLoader animationData={animation} size="xl" overlay={true} />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between p-4 pt-safe-top relative z-10">
@@ -292,16 +282,7 @@ export default function AuthScreen() {
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl shadow-2xl transition-all duration-200 active:scale-95 touch-manipulation mt-6 hover:shadow-3xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  {isLogin ? "Signing In..." : "Creating Account..."}
-                </div>
-              ) : isLogin ? (
-                "Sign In"
-              ) : (
-                "Create Account"
-              )}
+              {isLogin ? "Sign In" : "Create Account"}
             </button>
           </form>
 
@@ -332,28 +313,24 @@ export default function AuthScreen() {
               disabled={isLoading}
               className="w-full bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600/30 hover:from-slate-700 hover:to-slate-600 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 active:scale-95 touch-manipulation flex items-center justify-center backdrop-blur-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
-              ) : (
-                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-              )}
+              <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
               Continue with Google
             </button>
           </div>
