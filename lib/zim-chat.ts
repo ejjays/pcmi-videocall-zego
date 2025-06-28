@@ -1,4 +1,4 @@
-import { ZIM } from '@zegocloud/zego-zim-web'
+import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt'
 
 export interface ChatMessage {
   messageID: string
@@ -36,8 +36,8 @@ export class ZIMChatManager {
 
   async initialize(appId: number, userID: string, userName: string) {
     try {
-      // Create ZIM instance
-      this.zim = ZIM.create({
+      // Create ZIM instance using ZegoUIKitPrebuilt
+      this.zim = ZegoUIKitPrebuilt.create({
         appID: appId,
         appSign: process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET!
       })
