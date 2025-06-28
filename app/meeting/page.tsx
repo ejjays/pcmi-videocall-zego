@@ -4,49 +4,30 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import ProtectedRoute from "@/components/protected-route"
-import {
-  Mic,
-  MicOff,
-  Video,
-  VideoOff,
-  Phone,
-  Users,
-  MessageSquare,
-  MoreHorizontal,
-  RotateCcw,
-  Monitor,
-  X,
-} from "lucide-react"
-
-// Import ZegoUIKitPrebuilt for proper token generation and core functionality
+import MeetingPreparation from "@/components/meeting-preparation"
+import RoomShareModal from "@/components/room-share-modal"
+import CustomReactions from "@/components/custom-reactions"
 import { ZegoUIKitPrebuilt } from "@zegocloud/zego-uikit-prebuilt"
 
 export default function MeetingScreen() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-
-  const [roomId, setRoomId] = useState<string>("")
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOff, setIsVideoOff] = useState(false)
-  const [showParticipants, setShowParticipants] = useState(false)
-  const [showChat, setShowChat] = useState(false)
-  const [showMoreControls, setShowMoreControls] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
-  const [participants, setParticipants] = useState<any[]>([])
-
-  // ZegoCloud refs
   const containerRef = useRef<HTMLDivElement>(null)
   const zegoRef = useRef<any>(null)
-
-  const chatMessages = [
-    { id: 1, sender: "John Doe", message: "Welcome everyone!", time: "10:30" },
-    { id: 2, sender: "Jane Smith", message: "Thanks for having us", time: "10:31" },
-    { id: 3, sender: "Mike Johnson", message: "Can you share the presentation?", time: "10:32" },
-  ]
+  const initializationRef = useRef<boolean>(false)
+  const isLeavingRef = useRef<boolean>(false)
+  const [roomId, setRoomId] = useState<string>("")
+  const [showPreparation, setShowPreparation] = useState(true)
+  const [isConnected, setIsConnected] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(false)
+  const [error, setError] = useState<string>("")
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [meetingSettings, setMeetingSettings] = useState<{ video: boolean; audio: boolean; mirror: boolean } | null>(
+    null,
+  )
 
   useEffect(() => {
-    // Get room ID from URL params or generate a new one
     const urlRoomId = searchParams.get("roomId")
     if (urlRoomId) {
       setRoomId(urlRoomId)
@@ -58,32 +39,217 @@ export default function MeetingScreen() {
     }
   }, [searchParams])
 
+  // Initialize ZegoCloud when container is ready
   useEffect(() => {
-    if (!user || !roomId || !containerRef.current) return
-
-    initializeZegoCloud()
-
-    return () => {
-      if (zegoRef.current) {
-        zegoRef.current.destroy()
-        zegoRef.current = null
-      }
+    if (
+      !showPreparation &&
+      meetingSettings &&
+      containerRef.current &&
+      !isInitializing &&
+      !initializationRef.current &&
+      !zegoRef.current
+    ) {
+      console.log("Container is ready, initializing ZegoCloud...")
+      initializeZegoCloud(meetingSettings)
     }
-  }, [user, roomId])
+  }, [showPreparation, meetingSettings, isInitializing])
 
-  const initializeZegoCloud = async () => {
+  // 🪞 Apply mirror effect when connected
+  useEffect(() => {
+    if (isConnected && meetingSettings?.mirror && containerRef.current) {
+      applyMirrorEffect()
+    }
+  }, [isConnected, meetingSettings])
+
+  // 🖼️ CUSTOM AVATAR INJECTION - Force ZegoCloud to show profile pictures
+  // useEffect(() => {
+  //   if (isConnected && user?.photoURL && containerRef.current) {
+  //     injectCustomAvatars()
+  //   }
+  // }, [isConnected, user])
+
+  const applyMirrorEffect = () => {
     try {
-      const appId = Number.parseInt(process.env.NEXT_PUBLIC_ZEGO_APP_ID!)
-      const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET!
+      // Find all video elements in the ZegoCloud container
+      const videoElements = containerRef.current?.querySelectorAll("video")
 
-      if (!appId || !serverSecret) {
-        console.error("Missing ZegoCloud configuration")
-        return
+      if (videoElements) {
+        videoElements.forEach((video) => {
+          // Apply mirror effect only to the local video
+          const isLocalVideo =
+            video.getAttribute("data-local") === "true" ||
+            video.closest('[data-local="true"]') ||
+            video.style.transform?.includes("scaleX") !== undefined
+
+          if (isLocalVideo || videoElements.length === 1) {
+            video.style.transform = meetingSettings?.mirror ? "scaleX(-1)" : "scaleX(1)"
+            video.style.transition = "transform 0.3s ease"
+          }
+        })
       }
 
-      console.log("Initializing ZegoCloud with:", { appId, roomId, userId: user.uid })
+      // Also try to find video elements with common ZegoCloud classes
+      const zegoVideoElements = containerRef.current?.querySelectorAll(
+        '[class*="video"], [class*="local"], [class*="self"], video',
+      )
 
-      // Generate proper token using ZegoUIKitPrebuilt
+      if (zegoVideoElements) {
+        zegoVideoElements.forEach((element) => {
+          const video = element.tagName === "VIDEO" ? (element as HTMLVideoElement) : element.querySelector("video")
+          if (video) {
+            video.style.transform = meetingSettings?.mirror ? "scaleX(-1)" : "scaleX(1)"
+            video.style.transition = "transform 0.3s ease"
+          }
+        })
+      }
+    } catch (error) {
+      console.warn("Error applying mirror effect:", error)
+    }
+  }
+
+  // 🖼️ FORCE CUSTOM AVATARS INTO ZEGOCLOUD
+  // const injectCustomAvatars = () => {
+  //   if (!user?.photoURL || !containerRef.current) return
+
+  //   console.log("🖼️ Injecting custom avatars...")
+
+  //   try {
+  //     // Method 1: Find and replace avatar elements
+  //     const avatarElements = containerRef.current.querySelectorAll(
+  //       '[class*="avatar"], [class*="user"], [class*="participant"], [data-testid*="avatar"], img[src*="avatar"]',
+  //     )
+
+  //     avatarElements.forEach((element) => {
+  //       if (element.tagName === "IMG") {
+  //         const img = element as HTMLImageElement
+  //         if (!img.src.includes(user.photoURL!)) {
+  //           img.src = user.photoURL!
+  //           img.style.width = "80px"
+  //           img.style.height = "80px"
+  //           img.style.borderRadius = "50%"
+  //           img.style.objectFit = "cover"
+  //           console.log("✅ Updated avatar image")
+  //         }
+  //       }
+  //     })
+
+  //     // Method 2: Find elements with background images
+  //     const backgroundElements = containerRef.current.querySelectorAll("*")
+  //     backgroundElements.forEach((element) => {
+  //       const computedStyle = window.getComputedStyle(element)
+  //       if (computedStyle.backgroundImage && computedStyle.backgroundImage !== "none") {
+  //         const htmlElement = element as HTMLElement
+  //         htmlElement.style.backgroundImage = `url(${user.photoURL})`
+  //         htmlElement.style.backgroundSize = "cover"
+  //         htmlElement.style.backgroundPosition = "center"
+  //         console.log("✅ Updated background avatar")
+  //       }
+  //     })
+
+  //     // Method 3: Find text-based avatars (like "C") and replace with images
+  //     const textAvatars = containerRef.current.querySelectorAll("*")
+  //     textAvatars.forEach((element) => {
+  //       if (
+  //         element.textContent?.trim() === user.displayName?.charAt(0)?.toUpperCase() ||
+  //         element.textContent?.trim() === user.email?.charAt(0)?.toUpperCase()
+  //       ) {
+  //         const htmlElement = element as HTMLElement
+  //         // Replace text with image
+  //         htmlElement.innerHTML = `<img src="${user.photoURL}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" alt="Avatar" />`
+  //         console.log("✅ Replaced text avatar with image")
+  //       }
+  //     })
+
+  //     // Method 4: Inject custom CSS to override ZegoCloud avatars
+  //     const customCSS = `
+  //       /* Override ZegoCloud avatar styles */
+  //       [class*="avatar"]:not(:has(img[src*="${user.photoURL}"])) {
+  //         background-image: url(${user.photoURL}) !important;
+  //         background-size: cover !important;
+  //         background-position: center !important;
+  //         background-repeat: no-repeat !important;
+  //       }
+
+  //       /* Make avatars bigger */
+  //       [class*="avatar"], [class*="user-avatar"] {
+  //         min-width: 80px !important;
+  //         min-height: 80px !important;
+  //         width: 80px !important;
+  //         height: 80px !important;
+  //       }
+
+  //       /* Hide text in avatars when we have images */
+  //       [class*="avatar"]:has(img) span,
+  //       [class*="avatar"]:has(img) div {
+  //         display: none !important;
+  //       }
+  //     `
+
+  //     // Inject the CSS
+  //     let styleElement = document.getElementById("custom-avatar-styles")
+  //     if (!styleElement) {
+  //       styleElement = document.createElement("style")
+  //       styleElement.id = "custom-avatar-styles"
+  //       document.head.appendChild(styleElement)
+  //     }
+  //     styleElement.textContent = customCSS
+
+  //     console.log("✅ Custom avatar CSS injected")
+  //   } catch (error) {
+  //     console.warn("Error injecting custom avatars:", error)
+  //   }
+  // }
+
+  const initializeZegoCloud = async (settings: { video: boolean; audio: boolean; mirror: boolean }) => {
+    // Prevent duplicate initialization
+    if (isInitializing || initializationRef.current || zegoRef.current) {
+      console.log("Already initializing or initialized, skipping...")
+      return
+    }
+
+    initializationRef.current = true
+    setIsInitializing(true)
+    console.log("Starting ZegoCloud initialization with settings:", settings)
+
+    try {
+      // Check if user is available
+      if (!user) {
+        throw new Error("User not authenticated. Please sign in again.")
+      }
+
+      // Check if roomId is available
+      if (!roomId) {
+        throw new Error("Room ID is missing. Please try again.")
+      }
+
+      // Check environment variables
+      const appIdStr = process.env.NEXT_PUBLIC_ZEGO_APP_ID
+      const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET
+
+      if (!appIdStr || !serverSecret) {
+        throw new Error("ZegoCloud configuration is missing. Please check environment variables.")
+      }
+
+      const appId = Number.parseInt(appIdStr)
+      if (isNaN(appId)) {
+        throw new Error("Invalid ZegoCloud App ID configuration.")
+      }
+
+      // Wait for container to be ready with retries
+      let retries = 0
+      const maxRetries = 10
+      while (!containerRef.current && retries < maxRetries) {
+        console.log(`Waiting for container... (attempt ${retries + 1}/${maxRetries})`)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        retries++
+      }
+
+      if (!containerRef.current) {
+        throw new Error("Video container not ready. Please try again.")
+      }
+
+      console.log("Creating ZegoCloud instance...")
+
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
         appId,
         serverSecret,
@@ -94,300 +260,337 @@ export default function MeetingScreen() {
 
       console.log("Token generated successfully")
 
-      // Create ZegoUIKitPrebuilt instance
       const zp = ZegoUIKitPrebuilt.create(kitToken)
       zegoRef.current = zp
 
-      // Configure with minimal UI - we'll hide most of it and use our custom controls
+      console.log("ZegoUIKitPrebuilt instance created")
+
       await zp.joinRoom({
         container: containerRef.current,
         scenario: {
-          mode: ZegoUIKitPrebuilt.VideoConference,
+          mode: ZegoUIKitPrebuilt.GroupCall,
         },
+
+        // Disable pre-join view since we have our custom one
         showPreJoinView: false,
-        showRoomTimer: false,
-        showUserList: false,
-        maxUsers: 10,
-        layout: "Auto",
-        showLayoutButton: false,
-        showScreenSharingButton: false,
-        showTextChat: false,
-        showUserName: false,
-        showRemoveUserButton: false,
-        turnOnCameraWhenJoining: true,
-        turnOnMicrophoneWhenJoining: true,
-        useFrontFacingCamera: true,
+
+        // Enable all built-in features for the actual meeting
+        showMyCameraToggleButton: true,
+        showMyMicrophoneToggleButton: true,
+        showAudioVideoSettingsButton: true,
+        showScreenSharingButton: true,
+        showTextChat: true,
+        showUserList: true,
+        showLayoutButton: true,
         showLeavingView: false,
-        showMyCameraToggleButton: false,
-        showMyMicrophoneToggleButton: false,
-        showAudioVideoSettingsButton: false,
+        showRoomTimer: false,
+        showRemoveUserButton: false,
+
+        // Video settings - use the settings from preparation
+        turnOnCameraWhenJoining: settings.video,
+        turnOnMicrophoneWhenJoining: settings.audio,
+        useFrontFacingCamera: true,
+
+        // Start with no mirror - we'll handle it manually based on user preference
+        videoMirror: false,
+
+        // Video quality and orientation
+        videoResolution: "720p",
+        videoOrientation: "portrait",
+
+        // Layout settings
+        layout: "Auto",
+        maxUsers: 10,
+        showFullscreenButton: true,
+        showPinButton: true,
+        showNonVideoUser: true,
+        showOnlyAudioUser: true,
+
+        // Clean avatar approach - let ZegoCloud handle it naturally
+        userAvatarUrl: user.photoURL || undefined,
+
+        // Callbacks
         onJoinRoom: () => {
-          console.log("Successfully joined room:", roomId)
+          console.log("Successfully joined room")
           setIsConnected(true)
+          setError("")
+          setIsInitializing(false)
+
+          // Apply mirror effect after a short delay to ensure video is loaded
+          setTimeout(() => {
+            if (settings.mirror) {
+              applyMirrorEffect()
+            }
+          }, 1000)
         },
         onLeaveRoom: () => {
-          console.log("Left room")
-          router.push("/post-meeting")
+          console.log("User left the room - handling leave")
+
+          if (isLeavingRef.current) {
+            console.log("Already handling leave, skipping...")
+            return
+          }
+          isLeavingRef.current = true
+
+          zegoRef.current = null
+          initializationRef.current = false
+
+          setTimeout(() => {
+            console.log("Navigating to post-meeting page")
+            router.push("/post-meeting")
+          }, 100)
         },
         onUserJoin: (users: any[]) => {
           console.log("Users joined:", users)
-          setParticipants((prev) => [...prev, ...users])
+          // Reapply mirror effect when users join (in case DOM changes)
+          setTimeout(() => {
+            if (settings.mirror) {
+              applyMirrorEffect()
+            }
+          }, 500)
         },
         onUserLeave: (users: any[]) => {
           console.log("Users left:", users)
-          setParticipants((prev) => prev.filter((p) => !users.find((u) => u.userID === p.userID)))
         },
+        onError: (error: any) => {
+          console.error("ZegoCloud error:", error)
+          setError("Failed to join meeting. Please check your connection and try again.")
+          zegoRef.current = null
+          initializationRef.current = false
+          isLeavingRef.current = false
+          setShowPreparation(true)
+          setIsInitializing(false)
+        },
+
         branding: {
           logoURL: "",
         },
       })
 
-      console.log("ZegoCloud initialized successfully")
+      console.log("ZegoCloud room joined successfully")
     } catch (error) {
       console.error("Error initializing ZegoCloud:", error)
+      setError(`Failed to join meeting: ${error instanceof Error ? error.message : "Unknown error"}`)
+
+      zegoRef.current = null
+      initializationRef.current = false
+      isLeavingRef.current = false
+      setShowPreparation(true)
+      setIsInitializing(false)
     }
   }
 
-  const toggleMute = async () => {
-    if (zegoRef.current && zegoRef.current.localUser) {
+  const handleJoinMeeting = (settings: { video: boolean; audio: boolean; mirror: boolean }) => {
+    console.log("Join meeting requested with settings:", settings)
+
+    if (isInitializing || initializationRef.current) {
+      console.log("Already joining, ignoring duplicate request")
+      return
+    }
+
+    setMeetingSettings(settings)
+    setShowPreparation(false)
+    setError("")
+  }
+
+  const handleBackToHome = () => {
+    if (zegoRef.current && !isLeavingRef.current) {
       try {
-        // Correct method is on the 'microphone' property of the localUser object
-        await zegoRef.current.localUser.microphone.turnOn(!isMuted)
-        setIsMuted(!isMuted)
+        isLeavingRef.current = true
+        zegoRef.current.destroy()
       } catch (error) {
-        console.error("Error toggling microphone:", error)
+        console.warn("Error during cleanup:", error)
+      } finally {
+        zegoRef.current = null
+        initializationRef.current = false
+        isLeavingRef.current = false
+      }
+    }
+    router.push("/home")
+  }
+
+  const handleShare = () => {
+    setShowShareModal(true)
+  }
+
+  const handleRetry = () => {
+    if (zegoRef.current && !isLeavingRef.current) {
+      try {
+        isLeavingRef.current = true
+        zegoRef.current.destroy()
+      } catch (error) {
+        console.warn("Error during cleanup:", error)
+      } finally {
+        zegoRef.current = null
+        isLeavingRef.current = false
+      }
+    }
+
+    initializationRef.current = false
+    setError("")
+    setIsInitializing(false)
+    setIsConnected(false)
+    setMeetingSettings(null)
+    setShowPreparation(true)
+  }
+
+  // 🎭 Handle custom reactions
+  const handleSendReaction = (reaction: { emoji: string; userId: string; userName: string }) => {
+    console.log("Sending reaction:", reaction)
+
+    // TODO: You can integrate this with ZegoCloud's messaging system
+    // to send reactions to other participants in real-time
+
+    // Example: Send as a custom message through ZegoCloud
+    if (zegoRef.current && zegoRef.current.sendInRoomMessage) {
+      const reactionMessage = {
+        type: "reaction",
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        userName: reaction.userName,
+        timestamp: Date.now(),
+      }
+
+      try {
+        zegoRef.current.sendInRoomMessage(JSON.stringify(reactionMessage))
+        console.log("Reaction sent via ZegoCloud messaging")
+      } catch (error) {
+        console.warn("Failed to send reaction via ZegoCloud:", error)
       }
     }
   }
 
-  const toggleVideo = async () => {
-    if (zegoRef.current && zegoRef.current.localUser) {
-      try {
-        // Correct method is on the 'camera' property of the localUser object
-        await zegoRef.current.localUser.camera.turnOn(!isVideoOff)
-        setIsVideoOff(!isVideoOff)
-      } catch (error) {
-        console.error("Error toggling camera:", error)
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (zegoRef.current && !isLeavingRef.current) {
+        try {
+          console.log("Cleaning up ZegoCloud instance")
+          isLeavingRef.current = true
+          zegoRef.current.destroy()
+        } catch (error) {
+          console.warn("Error during ZegoCloud cleanup:", error)
+        } finally {
+          zegoRef.current = null
+          initializationRef.current = false
+          isLeavingRef.current = false
+        }
       }
     }
-  }
+  }, [])
 
-  const endCall = () => {
-    if (zegoRef.current) {
-      zegoRef.current.hangUp()
-    }
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-white text-2xl">!</span>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Unable to Join Meeting</h2>
+            <p className="text-slate-300 mb-6 text-sm leading-relaxed">{error}</p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleRetry}
+                className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={handleBackToHome}
+                className="w-full bg-slate-700/50 hover:bg-slate-600/50 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95"
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
   }
 
   if (!roomId) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
-            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-white font-medium">Preparing meeting...</p>
           </div>
-          <p className="text-white font-medium">Preparing meeting...</p>
         </div>
-      </div>
+      </ProtectedRoute>
     )
   }
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-black relative overflow-hidden animate-fadeIn">
-        {/* ZegoCloud Container - Hidden but functional */}
-        <div
-          ref={containerRef}
-          className="absolute inset-0 w-full h-full"
-          style={{
-            zIndex: 1,
-          }}
+      {showPreparation ? (
+        <MeetingPreparation
+          roomId={roomId}
+          onJoin={handleJoinMeeting}
+          onBack={handleBackToHome}
+          userName={user?.displayName || user?.email?.split("@")[0] || "User"}
         />
-
-        {/* Custom UI Overlay */}
-        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
-          {/* Meeting Info */}
-          <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 pointer-events-auto">
-            <p className="text-white font-medium">PCMI Meeting</p>
-            <p className="text-gray-300 text-sm">
-              {participants.length + 1} participant{participants.length !== 0 ? "s" : ""} •{" "}
-              {isConnected ? "Connected" : "Connecting..."}
-            </p>
-          </div>
-
-          {/* Room ID Display */}
-          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 pointer-events-auto">
-            <p className="text-white text-sm font-mono">Room: {roomId.split("_")[2]}</p>
-          </div>
-        </div>
-
-        {/* Custom Controls Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ zIndex: 3 }}>
-          <div className="bg-gradient-to-t from-black/80 to-transparent p-4 pb-8">
-            <div className="flex items-center justify-center space-x-4 pointer-events-auto">
-              {/* Mute/Unmute */}
-              <button
-                onClick={toggleMute}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation ${
-                  isMuted ? "bg-red-600 hover:bg-red-700" : "bg-white/20 hover:bg-white/30 backdrop-blur-sm"
-                }`}
-              >
-                {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
-              </button>
-
-              {/* Video Toggle */}
-              <button
-                onClick={toggleVideo}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation ${
-                  isVideoOff ? "bg-red-600 hover:bg-red-700" : "bg-white/20 hover:bg-white/30 backdrop-blur-sm"
-                }`}
-              >
-                {isVideoOff ? <VideoOff className="w-6 h-6 text-white" /> : <Video className="w-6 h-6 text-white" />}
-              </button>
-
-              {/* End Call */}
-              <button
-                onClick={endCall}
-                className="w-16 h-16 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation"
-              >
-                <Phone className="w-7 h-7 text-white rotate-[135deg]" />
-              </button>
-
-              {/* More Controls */}
-              <button
-                onClick={() => setShowMoreControls(!showMoreControls)}
-                className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation"
-              >
-                <MoreHorizontal className="w-6 h-6 text-white" />
-              </button>
-            </div>
-
-            {/* Secondary Controls */}
-            {showMoreControls && (
-              <div className="flex items-center justify-center space-x-4 mt-4 pointer-events-auto">
-                <button
-                  onClick={() => setShowParticipants(true)}
-                  className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation"
-                >
-                  <Users className="w-5 h-5 text-white" />
-                </button>
-
-                <button
-                  onClick={() => setShowChat(true)}
-                  className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation"
-                >
-                  <MessageSquare className="w-5 h-5 text-white" />
-                </button>
-
-                <button className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation">
-                  <Monitor className="w-5 h-5 text-white" />
-                </button>
-
-                <button className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 active:scale-95 touch-manipulation">
-                  <RotateCcw className="w-5 h-5 text-white" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Participants Panel */}
-        {showParticipants && (
+      ) : (
+        <div className="min-h-screen bg-black relative">
+          {/* ZegoCloud Video Container */}
           <div
-            className="absolute inset-y-0 right-0 w-80 bg-gradient-card backdrop-blur-lg shadow-2xl transform transition-transform duration-300 ease-out border-l border-dark-600/30"
-            style={{ zIndex: 4 }}
-          >
-            <div className="flex items-center justify-between p-4 border-b border-dark-600/30">
-              <h3 className="text-lg font-semibold text-white">Participants ({participants.length + 1})</h3>
-              <button
-                onClick={() => setShowParticipants(false)}
-                className="p-2 rounded-xl hover:bg-dark-700/50 transition-colors duration-200"
-              >
-                <X className="w-5 h-5 text-dark-300" />
-              </button>
-            </div>
+            ref={containerRef}
+            className="w-full h-screen"
+            style={{
+              minHeight: "100vh",
+              width: "100vw",
+            }}
+          />
 
-            <div className="flex-1 overflow-y-auto">
-              {/* Current user */}
-              <div className="flex items-center justify-between px-4 py-3 hover:bg-dark-700/30 transition-colors">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mr-3">
-                    <span className="text-white font-medium text-sm">
-                      {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "U"}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-white">You</p>
-                    <p className="text-xs text-primary-400">Host</p>
-                  </div>
+          {/* Loading overlay while connecting */}
+          {(isInitializing || !isConnected) && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl">
+                  <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 </div>
-                {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
+                <p className="text-white font-medium">
+                  {isInitializing ? "Initializing meeting..." : "Connecting to meeting..."}
+                </p>
               </div>
-
-              {/* Remote participants */}
-              {participants.map((participant) => (
-                <div
-                  key={participant.userID}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-dark-700/30 transition-colors"
-                >
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center mr-3">
-                      <span className="text-white font-medium text-sm">{participant.userName?.charAt(0) || "U"}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">{participant.userName}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Chat Panel */}
-        {showChat && (
-          <div
-            className="absolute inset-y-0 right-0 w-80 bg-gradient-card backdrop-blur-lg shadow-2xl transform transition-transform duration-300 ease-out flex flex-col border-l border-dark-600/30"
-            style={{ zIndex: 4 }}
-          >
-            <div className="flex items-center justify-between p-4 border-b border-dark-600/30">
-              <h3 className="text-lg font-semibold text-white">Chat</h3>
-              <button
-                onClick={() => setShowChat(false)}
-                className="p-2 rounded-xl hover:bg-dark-700/50 transition-colors duration-200"
-              >
-                <X className="w-5 h-5 text-dark-300" />
-              </button>
-            </div>
+          {/* 🎭 CUSTOM REACTIONS OVERLAY */}
+          {isConnected && (
+            <CustomReactions
+              roomId={roomId}
+              userId={user?.uid || "anonymous"}
+              userName={user?.displayName || user?.email?.split("@")[0] || "User"}
+              onSendReaction={handleSendReaction}
+            />
+          )}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {chatMessages.map((message) => (
-                <div key={message.id} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-sm text-white">{message.sender}</p>
-                    <p className="text-xs text-dark-300">{message.time}</p>
-                  </div>
-                  <p className="text-sm text-dark-200">{message.message}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 border-t border-dark-600/30">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-600/30 rounded-xl text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 outline-none transition-all duration-200"
+          {/* Share button - Clean meeting interface */}
+          {isConnected && (
+            <button
+              onClick={handleShare}
+              className="fixed top-4 right-4 z-50 p-3 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-full shadow-lg transition-all duration-200 active:scale-95 touch-manipulation"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"
                 />
-                <button className="bg-gradient-primary text-white p-2 rounded-xl hover:opacity-90 transition-opacity active:scale-95">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+              </svg>
+            </button>
+          )}
+
+          {/* Share Modal */}
+          <RoomShareModal roomId={roomId} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
+        </div>
+      )}
     </ProtectedRoute>
   )
 }

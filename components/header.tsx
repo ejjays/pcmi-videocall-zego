@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Settings, Video } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import AvatarWithFallback from "@/components/ui/avatar-with-fallback"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 interface HeaderProps {
   title?: string
@@ -57,13 +57,12 @@ export default function Header({ title = "PCMI", showBackButton = false, backHre
               onClick={handleLogout}
               className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation"
             >
-              <AvatarWithFallback
-                src={user?.photoURL}
-                name={user?.displayName}
-                email={user?.email}
-                size="md"
-                alt="Profile"
-              />
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={user?.photoURL || undefined} alt="Profile" />
+                <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-sm">
+                  {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "U"}
+                </AvatarFallback>
+              </Avatar>
             </button>
           </div>
         )}

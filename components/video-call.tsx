@@ -45,13 +45,15 @@ export default function VideoCall({ roomId, onLeave }: VideoCallProps) {
 
       console.log("ZegoUIKitPrebuilt instance created")
 
-      // Join the room
+      // Join the room with CASUAL GroupCall UI! 🎉
       zp.joinRoom({
         container: containerRef.current,
         scenario: {
-          mode: ZegoUIKitPrebuilt.VideoConference, // Use VideoConference for group calls
+          mode: ZegoUIKitPrebuilt.GroupCall, // 🎉 CHANGED: Now using casual GroupCall mode!
         },
-        showPreJoinView: false,
+
+        // 🎉 ENABLE ALL THE AWESOME BUILT-IN FEATURES!
+        showPreJoinView: true,
         showRoomTimer: true,
         showUserList: true,
         maxUsers: 10,
@@ -64,7 +66,14 @@ export default function VideoCall({ roomId, onLeave }: VideoCallProps) {
         turnOnCameraWhenJoining: true,
         turnOnMicrophoneWhenJoining: true,
         useFrontFacingCamera: true,
-        showLeavingView: false,
+        showLeavingView: true,
+        showMyCameraToggleButton: true,
+        showMyMicrophoneToggleButton: true,
+        showAudioVideoSettingsButton: true,
+        showFullscreenButton: true,
+        showPinButton: true,
+
+        // Callbacks
         onLeaveRoom: () => {
           console.log("User left the room")
           onLeave?.()
@@ -78,17 +87,14 @@ export default function VideoCall({ roomId, onLeave }: VideoCallProps) {
         onUserLeave: (users: any[]) => {
           console.log("Users left:", users)
         },
-        // Custom styling to match your theme
+
+        // Branding
         branding: {
           logoURL: "",
         },
-        // UI customization
-        showMyCameraToggleButton: true,
-        showMyMicrophoneToggleButton: true,
-        showAudioVideoSettingsButton: true,
       })
 
-      console.log("Joining room...")
+      console.log("Joining room with casual GroupCall UI...")
     } catch (error) {
       console.error("Error setting up video call:", error)
     }
@@ -97,8 +103,13 @@ export default function VideoCall({ roomId, onLeave }: VideoCallProps) {
     return () => {
       if (zpRef.current) {
         console.log("Cleaning up ZegoCloud instance")
-        zpRef.current.destroy()
-        zpRef.current = null
+        try {
+          zpRef.current.destroy()
+        } catch (error) {
+          console.warn("Error during cleanup:", error)
+        } finally {
+          zpRef.current = null
+        }
       }
     }
   }, [user, roomId, onLeave])
