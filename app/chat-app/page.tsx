@@ -58,7 +58,7 @@ export default function ChatAppPage() {
       setIsLoading(true)
       
       // Import ZIM SDK dynamically
-      const { ZIM } = await import('@zegocloud/zego-uikit-prebuilt')
+      const ZIM = (await import('@zegocloud/zego-uikit-prebuilt')).ZIM
       
       const appId = Number.parseInt(process.env.NEXT_PUBLIC_ZEGO_APP_ID!)
       const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET!
