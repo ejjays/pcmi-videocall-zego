@@ -10,17 +10,18 @@ import { AdminUser } from "@/types/admin"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
 import PageLoader from "@/components/ui/page-loader"
 import ToastNotification from "@/components/ui/toast-notification"
+import ProtectedRoute from "@/components/protected-route"
 
 export default function AdminUsersPage() {
   const { user } = useAuth()
-  const { isAdmin, isLoading: adminLoading, error: adminError } = useAdmin()
+  const { isAdmin, isLoading: adminLoading } = useAdmin()
   const router = useRouter()
   const { animation } = useLoadingAnimation()
   
   const [users, setUsers] = useState<AdminUser[]>([])
   const [filteredUsers, setFilteredUsers] = useState<AdminUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [isLoading, setIsLoading] = useState(false) // Changed to false initially
+  const [isLoading, setIsLoading] = useState(false)
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   
@@ -56,14 +57,7 @@ export default function AdminUsersPage() {
     }
   }, [])
 
-  // Redirect if not admin
-  useEffect(() => {
-    if (!adminLoading && !isAdmin && !adminError) {
-      router.push("/home")
-    }
-  }, [isAdmin, adminLoading, adminError, router])
-
-  // Load users immediately when admin status is confirmed
+  // Load users when component mounts and user is admin
   useEffect(() => {
     if (isAdmin && !adminLoading) {
       loadUsers()
@@ -86,7 +80,6 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       setIsLoading(true)
-      // getAllUsers will return cached data immediately if available
       const allUsers = await getAllUsers()
       setUsers(allUsers)
       
@@ -133,181 +126,174 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Show loading only when both admin check and user loading are happening
-  if (adminLoading) {
-    return <PageLoader animationData={animation} size="xl" />
-  }
-
-  if (!isAdmin && !adminError) {
-    return null // Will redirect
-  }
-
   const adminUsers = filteredUsers.filter(u => u.isAdmin)
   const regularUsers = filteredUsers.filter(u => !u.isAdmin)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-      {/* Toast Notification */}
-      <ToastNotification
-        message={toast.message}
-        isVisible={toast.isVisible}
-        onClose={hideToast}
-        type={toast.type}
-        duration={4000}
-      />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
+        {/* Toast Notification */}
+        <ToastNotification
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={hideToast}
+          type={toast.type}
+          duration={4000}
+        />
 
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 pt-safe-top border-b border-slate-700/30">
-        <button
-          onClick={() => router.back()}
-          className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation"
-        >
-          <ArrowLeft className="w-6 h-6 text-white" />
-        </button>
-        <div className="flex items-center">
-          <h1 className="text-xl font-bold text-white mr-3">User Management</h1>
-          {/* Network Status Indicator */}
-          <div className={`p-1 rounded-full ${isOnline ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-            {isOnline ? (
-              <Wifi className="w-4 h-4 text-green-400" />
-            ) : (
-              <WifiOff className="w-4 h-4 text-red-400" />
-            )}
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 pt-safe-top border-b border-slate-700/30">
+          <button
+            onClick={() => router.push("/home")}
+            className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation"
+          >
+            <ArrowLeft className="w-6 h-6 text-white" />
+          </button>
+          <div className="flex items-center">
+            <h1 className="text-xl font-bold text-white mr-3">User Management</h1>
+            {/* Network Status Indicator */}
+            <div className={`p-1 rounded-full ${isOnline ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+              {isOnline ? (
+                <Wifi className="w-4 h-4 text-green-400" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-red-400" />
+              )}
+            </div>
           </div>
+          <div className="w-10" />
         </div>
-        <div className="w-10" />
-      </div>
 
-      <div className="p-4 space-y-6">
-        {/* Network Status Banner */}
-        {!isOnline && (
-          <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
-            <div className="flex items-center">
-              <WifiOff className="w-5 h-5 text-orange-400 mr-2" />
-              <div>
-                <p className="text-orange-400 font-medium text-sm">Offline Mode</p>
-                <p className="text-orange-300 text-xs">Showing cached data. Admin changes disabled.</p>
+        <div className="p-4 space-y-6">
+          {/* Network Status Banner */}
+          {!isOnline && (
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
+              <div className="flex items-center">
+                <WifiOff className="w-5 h-5 text-orange-400 mr-2" />
+                <div>
+                  <p className="text-orange-400 font-medium text-sm">Offline Mode</p>
+                  <p className="text-orange-300 text-xs">Showing cached data. Admin changes disabled.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-2xl p-4 border border-slate-600/30">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center mr-3">
+                  <Users className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white">{users.length}</p>
+                  <p className="text-slate-400 text-sm">Total Users</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-2xl p-4 border border-slate-600/30">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-purple-600/20 rounded-xl flex items-center justify-center mr-3">
+                  <Crown className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white">{adminUsers.length}</p>
+                  <p className="text-slate-400 text-sm">Administrators</p>
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-2xl p-4 border border-slate-600/30">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center mr-3">
-                <Users className="w-5 h-5 text-blue-400" />
-              </div>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search users by name or email..."
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            />
+          </div>
+
+          {/* Admin Access Info */}
+          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
+            <div className="flex items-start">
+              <Shield className="w-5 h-5 text-cyan-400 mr-3 mt-0.5" />
               <div>
-                <p className="text-2xl font-bold text-white">{users.length}</p>
-                <p className="text-slate-400 text-sm">Total Users</p>
+                <p className="text-cyan-400 font-medium text-sm mb-1">Admin Panel Access</p>
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  Direct URL: <code className="bg-slate-800/50 px-2 py-1 rounded text-cyan-300">
+                    {typeof window !== 'undefined' ? window.location.origin : ''}/admin/users
+                  </code>
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-2xl p-4 border border-slate-600/30">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-purple-600/20 rounded-xl flex items-center justify-center mr-3">
-                <Crown className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{adminUsers.length}</p>
-                <p className="text-slate-400 text-sm">Administrators</p>
-              </div>
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
+              <span className="ml-3 text-slate-400">Loading users...</span>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search users by name or email..."
-            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-600/30 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-        </div>
-
-        {/* Admin Access Info */}
-        <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
-          <div className="flex items-start">
-            <Shield className="w-5 h-5 text-cyan-400 mr-3 mt-0.5" />
+          {/* Administrators Section */}
+          {!isLoading && adminUsers.length > 0 && (
             <div>
-              <p className="text-cyan-400 font-medium text-sm mb-1">Admin Panel Access</p>
-              <p className="text-slate-300 text-xs leading-relaxed">
-                Direct URL: <code className="bg-slate-800/50 px-2 py-1 rounded text-cyan-300">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/admin/users
-                </code>
+              <div className="flex items-center mb-4">
+                <Crown className="w-5 h-5 text-purple-400 mr-2" />
+                <h2 className="text-lg font-bold text-white">Administrators ({adminUsers.length})</h2>
+              </div>
+              <div className="space-y-3">
+                {adminUsers.map((adminUser) => (
+                  <UserCard
+                    key={adminUser.uid}
+                    user={adminUser}
+                    currentUserId={user?.uid}
+                    isUpdating={isUpdating === adminUser.uid}
+                    isOnline={isOnline}
+                    onToggleAdmin={handleToggleAdmin}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Regular Users Section */}
+          {!isLoading && (
+            <div>
+              <div className="flex items-center mb-4">
+                <Users className="w-5 h-5 text-blue-400 mr-2" />
+                <h2 className="text-lg font-bold text-white">Users ({regularUsers.length})</h2>
+              </div>
+              <div className="space-y-3">
+                {regularUsers.map((regularUser) => (
+                  <UserCard
+                    key={regularUser.uid}
+                    user={regularUser}
+                    currentUserId={user?.uid}
+                    isUpdating={isUpdating === regularUser.uid}
+                    isOnline={isOnline}
+                    onToggleAdmin={handleToggleAdmin}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!isLoading && filteredUsers.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">
+                {isOnline ? "No users found" : "No cached user data available"}
               </p>
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
-            <span className="ml-3 text-slate-400">Loading users...</span>
-          </div>
-        )}
-
-        {/* Administrators Section */}
-        {!isLoading && adminUsers.length > 0 && (
-          <div>
-            <div className="flex items-center mb-4">
-              <Crown className="w-5 h-5 text-purple-400 mr-2" />
-              <h2 className="text-lg font-bold text-white">Administrators ({adminUsers.length})</h2>
-            </div>
-            <div className="space-y-3">
-              {adminUsers.map((adminUser) => (
-                <UserCard
-                  key={adminUser.uid}
-                  user={adminUser}
-                  currentUserId={user?.uid}
-                  isUpdating={isUpdating === adminUser.uid}
-                  isOnline={isOnline}
-                  onToggleAdmin={handleToggleAdmin}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Regular Users Section */}
-        {!isLoading && (
-          <div>
-            <div className="flex items-center mb-4">
-              <Users className="w-5 h-5 text-blue-400 mr-2" />
-              <h2 className="text-lg font-bold text-white">Users ({regularUsers.length})</h2>
-            </div>
-            <div className="space-y-3">
-              {regularUsers.map((regularUser) => (
-                <UserCard
-                  key={regularUser.uid}
-                  user={regularUser}
-                  currentUserId={user?.uid}
-                  isUpdating={isUpdating === regularUser.uid}
-                  isOnline={isOnline}
-                  onToggleAdmin={handleToggleAdmin}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!isLoading && filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400">
-              {isOnline ? "No users found" : "No cached user data available"}
-            </p>
-          </div>
-        )}
       </div>
-    </div>
+    </ProtectedRoute>
   )
 }
 
