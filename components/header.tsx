@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { Video } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Image from "next/image"
 
@@ -14,17 +13,7 @@ interface HeaderProps {
 }
 
 export default function Header({ title = "PCMI", showBackButton = false, backHref = "/home" }: HeaderProps) {
-  const { user, logout } = useAuth()
-  const router = useRouter()
-
-  const handleLogout = async () => {
-    try {
-      await logout()
-      router.push("/")
-    } catch (error) {
-      console.error("Logout error:", error)
-    }
-  }
+  const { user } = useAuth()
 
   return (
     <header className="bg-gradient-to-r from-dark-900/95 to-dark-800/95 backdrop-blur-lg border-b border-dark-600/30 safe-area-top">
@@ -64,8 +53,8 @@ export default function Header({ title = "PCMI", showBackButton = false, backHre
                 style={{ filter: 'none' }}
               />
             </Link>
-            <button
-              onClick={handleLogout}
+            <Link
+              href="/profile"
               className="p-2 rounded-xl hover:bg-dark-700/50 active:bg-dark-600/50 transition-colors duration-200 touch-manipulation"
             >
               <Avatar className="w-8 h-8">
@@ -74,7 +63,7 @@ export default function Header({ title = "PCMI", showBackButton = false, backHre
                   {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
-            </button>
+            </Link>
           </div>
         )}
       </div>
