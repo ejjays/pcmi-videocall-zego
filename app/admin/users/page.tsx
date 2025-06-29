@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useAdmin } from "@/hooks/use-admin"
 import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus } from "@/lib/admin"
 import { AdminUser } from "@/types/admin"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
@@ -14,7 +13,6 @@ import ProtectedRoute from "@/components/protected-route"
 
 export default function AdminUsersPage() {
   const { user } = useAuth()
-  const { isAdmin, isLoading: adminLoading } = useAdmin()
   const router = useRouter()
   const { animation } = useLoadingAnimation()
   
@@ -57,12 +55,10 @@ export default function AdminUsersPage() {
     }
   }, [])
 
-  // Load users when component mounts and user is admin
+  // Load users when component mounts
   useEffect(() => {
-    if (isAdmin && !adminLoading) {
-      loadUsers()
-    }
-  }, [isAdmin, adminLoading])
+    loadUsers()
+  }, [])
 
   // Filter users based on search
   useEffect(() => {
@@ -164,6 +160,17 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="p-4 space-y-6">
+          {/* Testing Mode Banner */}
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
+            <div className="flex items-center">
+              <Shield className="w-5 h-5 text-yellow-400 mr-2" />
+              <div>
+                <p className="text-yellow-400 font-medium text-sm">Testing Mode</p>
+                <p className="text-yellow-300 text-xs">Admin restrictions temporarily disabled for testing purposes.</p>
+              </div>
+            </div>
+          </div>
+
           {/* Network Status Banner */}
           {!isOnline && (
             <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">

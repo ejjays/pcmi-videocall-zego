@@ -4,9 +4,8 @@ import Link from "next/link"
 import Header from "@/components/header"
 import BottomNav from "@/components/bottom-nav"
 import ProtectedRoute from "@/components/protected-route"
-import AdminOnlyMessage from "@/components/admin-only-message"
 import { useAuth } from "@/contexts/auth-context"
-import { useAdmin, useMeetingStatus } from "@/hooks/use-admin"
+import { useMeetingStatus } from "@/hooks/use-admin"
 import { startMeeting, FIXED_ROOM_ID } from "@/lib/admin"
 import { Video, Plus, Calendar, ChevronRight, Users, Settings, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -17,12 +16,10 @@ import ToastNotification from "@/components/ui/toast-notification"
 
 export default function HomeScreen() {
   const { user } = useAuth()
-  const { isAdmin, isLoading: adminLoading } = useAdmin()
   const { meetingStatus, isLoading: meetingLoading } = useMeetingStatus()
   const router = useRouter()
   const { animation } = useLoadingAnimation()
   
-  const [showAdminMessage, setShowAdminMessage] = useState(false)
   const [isStartingMeeting, setIsStartingMeeting] = useState(false)
   
   // Toast state
@@ -68,17 +65,12 @@ export default function HomeScreen() {
   ]
 
   const handleNewMeeting = async () => {
-    if (!isAdmin) {
-      setShowAdminMessage(true)
-      return
-    }
-
     if (!user) return
 
     setIsStartingMeeting(true)
     
     try {
-      await startMeeting(user.uid, user.displayName || user.email || "Admin")
+      await startMeeting(user.uid, user.displayName || user.email || "User")
       showToast("Meeting started successfully! 🎉", 'success')
       
       // Navigate to meeting after a short delay
@@ -100,11 +92,7 @@ export default function HomeScreen() {
     }
   }
 
-  if (showAdminMessage) {
-    return <AdminOnlyMessage />
-  }
-
-  if (adminLoading || meetingLoading) {
+  if (meetingLoading) {
     return (
       <ProtectedRoute>
         <PageLoader animationData={animation} size="xl" />
@@ -138,34 +126,26 @@ export default function HomeScreen() {
               Welcome back, {user?.displayName?.split(" ")[0] || "User"}! 👋
             </h1>
             <p className="text-slate-300">Ready for the Word of God?</p>
-            {isAdmin && (
-              <div className="mt-2 flex items-center">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
-                <span className="text-purple-400 text-sm font-medium">Administrator</span>
-              </div>
-            )}
           </div>
 
-          {/* Admin Panel Link */}
-          {isAdmin && (
-            <Link
-              href="/admin/users"
-              className="block w-full bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl mb-6"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-3 backdrop-blur-sm">
-                    <Settings className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">Admin Panel</h3>
-                    <p className="text-white/80 text-sm">Manage users and permissions</p>
-                  </div>
+          {/* Admin Panel Link - Available to all users for testing */}
+          <Link
+            href="/admin/users"
+            className="block w-full bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl mb-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-3 backdrop-blur-sm">
+                  <Settings className="w-5 h-5 text-white" />
                 </div>
-                <ChevronRight className="w-6 h-6 text-white/60" />
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Admin Panel</h3>
+                  <p className="text-white/80 text-sm">Manage users and permissions (Testing)</p>
+                </div>
               </div>
-            </Link>
-          )}
+              <ChevronRight className="w-6 h-6 text-white/60" />
+            </div>
+          </Link>
 
           {/* Quick Actions */}
           <div className="space-y-4 mb-8">
@@ -180,12 +160,8 @@ export default function HomeScreen() {
                     <Video className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      {isAdmin ? "Start Meeting" : "New Meeting"}
-                    </h3>
-                    <p className="text-white/80 text-sm">
-                      {isAdmin ? "Start the main meeting room" : "Join the main meeting room"}
-                    </p>
+                    <h3 className="text-lg font-semibold text-white">Start Meeting</h3>
+                    <p className="text-white/80 text-sm">Start the main meeting room</p>
                   </div>
                 </div>
                 <ChevronRight className="w-6 h-6 text-white/60" />
