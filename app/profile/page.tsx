@@ -98,6 +98,7 @@ export default function ProfilePage() {
   const handleCropComplete = async (croppedImage: string) => {
     if (!user) return
 
+    console.log('Crop complete callback triggered')
     setIsUpdating(true)
     setShowImageCropper(false)
 
@@ -128,8 +129,13 @@ export default function ProfilePage() {
   }
 
   const handleCropCancel = () => {
+    console.log('Crop cancelled')
     setShowImageCropper(false)
     setSelectedImageForCrop("")
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }
 
   // Load profile image from localStorage on component mount
@@ -304,7 +310,8 @@ export default function ProfilePage() {
                 </div>
                 <button
                   onClick={handleProfilePictureClick}
-                  className="absolute -bottom-1 -right-1 w-8 h-8 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-95"
+                  disabled={isUpdating}
+                  className="absolute -bottom-1 -right-1 w-8 h-8 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-95 disabled:opacity-50"
                 >
                   <Camera className="w-4 h-4 text-white" />
                 </button>

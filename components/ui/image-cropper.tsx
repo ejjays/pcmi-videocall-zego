@@ -23,6 +23,7 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
   const [zoom, setZoom] = useState(1)
   const [rotation, setRotation] = useState(0)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const onCropChange = useCallback((crop: { x: number; y: number }) => {
     setCrop(crop)
@@ -121,18 +122,31 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
   }
 
   const handleCropConfirm = async () => {
-    if (!croppedAreaPixels) return
+    if (!croppedAreaPixels || isProcessing) return
+
+    setIsProcessing(true)
 
     try {
+      console.log('Starting crop process...')
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels, rotation)
+      console.log('Crop completed successfully')
       onCropComplete(croppedImage)
     } catch (error) {
       console.error('Error cropping image:', error)
+      // Reset processing state on error
+      setIsProcessing(false)
+      // You could show an error message here
+      alert('Failed to crop image. Please try again.')
     }
   }
 
   const resetRotation = () => {
     setRotation(0)
+  }
+
+  const handleCancel = () => {
+    setIsProcessing(false)
+    onCancel()
   }
 
   if (!isOpen) return null
@@ -142,17 +156,23 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
       {/* Header */}
       <div className="flex items-center justify-between p-4 pt-safe-top bg-black/50">
         <button
-          onClick={onCancel}
-          className="p-2 rounded-xl hover:bg-white/10 transition-colors duration-200 touch-manipulation"
+          onClick={handleCancel}
+          disabled={isProcessing}
+          className="p-2 rounded-xl hover:bg-white/10 transition-colors duration-200 touch-manipulation disabled:opacity-50"
         >
           <X className="w-6 h-6 text-white" />
         </button>
         <h2 className="text-lg font-semibold text-white">Crop Photo</h2>
         <button
           onClick={handleCropConfirm}
-          className="p-2 rounded-xl hover:bg-white/10 transition-colors duration-200 touch-manipulation"
+          disabled={isProcessing || !croppedAreaPixels}
+          className="p-2 rounded-xl hover:bg-white/10 transition-colors duration-200 touch-manipulation disabled:opacity-50"
         >
-          <Check className="w-6 h-6 text-white" />
+          {isProcessing ? (
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <Check className="w-6 h-6 text-white" />
+          )}
         </button>
       </div>
 
@@ -192,7 +212,8 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
             step={0.1}
             value={zoom}
             onChange={(e) => setZoom(Number(e.target.value))}
-            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider"
+            disabled={isProcessing}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider disabled:opacity-50"
           />
         </div>
 
@@ -202,7 +223,8 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
             <label className="text-white text-sm font-medium">Rotation</label>
             <button
               onClick={resetRotation}
-              className="p-1 rounded-lg hover:bg-white/10 transition-colors duration-200"
+              disabled={isProcessing}
+              className="p-1 rounded-lg hover:bg-white/10 transition-colors duration-200 disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4 text-white" />
             </button>
@@ -214,23 +236,33 @@ export default function ImageCropper({ imageSrc, onCropComplete, onCancel, isOpe
             step={1}
             value={rotation}
             onChange={(e) => setRotation(Number(e.target.value))}
-            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider"
+            disabled={isProcessing}
+            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider disabled:opacity-50"
           />
         </div>
 
         {/* Action Buttons */}
         <div className="flex space-x-3 pt-2">
           <button
-            onClick={onCancel}
-            className="flex-1 py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors duration-200 font-medium"
+            onClick={handleCancel}
+            disabled={isProcessing}
+            className="flex-1 py-3 px-4 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors duration-200 font-medium disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleCropConfirm}
-            className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-xl transition-all duration-200 active:scale-95 font-medium"
+            disabled={isProcessing || !croppedAreaPixels}
+            className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-xl transition-all duration-200 active:scale-95 font-medium disabled:opacity-50 flex items-center justify-center"
           >
-            Apply
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                Processing...
+              </>
+            ) : (
+              'Apply'
+            )}
           </button>
         </div>
       </div>
