@@ -20,7 +20,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [filteredUsers, setFilteredUsers] = useState<AdminUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Changed to false initially
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   
@@ -44,9 +44,6 @@ export default function AdminUsersPage() {
     const updateNetworkStatus = () => {
       const online = checkNetworkStatus()
       setIsOnline(online)
-      if (!online) {
-        showToast("You're offline. Using cached data.", 'info')
-      }
     }
 
     updateNetworkStatus()
@@ -66,12 +63,12 @@ export default function AdminUsersPage() {
     }
   }, [isAdmin, adminLoading, adminError, router])
 
-  // Load users
+  // Load users immediately when admin status is confirmed
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && !adminLoading) {
       loadUsers()
     }
-  }, [isAdmin])
+  }, [isAdmin, adminLoading])
 
   // Filter users based on search
   useEffect(() => {
@@ -89,6 +86,7 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       setIsLoading(true)
+      // getAllUsers will return cached data immediately if available
       const allUsers = await getAllUsers()
       setUsers(allUsers)
       
@@ -97,10 +95,7 @@ export default function AdminUsersPage() {
       }
     } catch (error: any) {
       console.error("Error loading users:", error)
-      showToast(
-        isOnline ? "Failed to load users" : "Using cached data due to connection issues", 
-        isOnline ? 'error' : 'info'
-      )
+      showToast("Failed to load users", 'error')
     } finally {
       setIsLoading(false)
     }
@@ -132,18 +127,14 @@ export default function AdminUsersPage() {
       await loadUsers()
     } catch (error: any) {
       console.error("Error updating admin status:", error)
-      showToast(
-        error.message.includes('offline') || error.code === 'unavailable'
-          ? "Cannot update admin status while offline"
-          : "Failed to update admin status", 
-        'error'
-      )
+      showToast("Failed to update admin status", 'error')
     } finally {
       setIsUpdating(null)
     }
   }
 
-  if (adminLoading || isLoading) {
+  // Show loading only when both admin check and user loading are happening
+  if (adminLoading) {
     return <PageLoader animationData={animation} size="xl" />
   }
 
@@ -248,15 +239,23 @@ export default function AdminUsersPage() {
               <p className="text-cyan-400 font-medium text-sm mb-1">Admin Panel Access</p>
               <p className="text-slate-300 text-xs leading-relaxed">
                 Direct URL: <code className="bg-slate-800/50 px-2 py-1 rounded text-cyan-300">
-                  {window.location.origin}/admin/users
+                  {typeof window !== 'undefined' ? window.location.origin : ''}/admin/users
                 </code>
               </p>
             </div>
           </div>
         </div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
+            <span className="ml-3 text-slate-400">Loading users...</span>
+          </div>
+        )}
+
         {/* Administrators Section */}
-        {adminUsers.length > 0 && (
+        {!isLoading && adminUsers.length > 0 && (
           <div>
             <div className="flex items-center mb-4">
               <Crown className="w-5 h-5 text-purple-400 mr-2" />
@@ -278,26 +277,28 @@ export default function AdminUsersPage() {
         )}
 
         {/* Regular Users Section */}
-        <div>
-          <div className="flex items-center mb-4">
-            <Users className="w-5 h-5 text-blue-400 mr-2" />
-            <h2 className="text-lg font-bold text-white">Users ({regularUsers.length})</h2>
+        {!isLoading && (
+          <div>
+            <div className="flex items-center mb-4">
+              <Users className="w-5 h-5 text-blue-400 mr-2" />
+              <h2 className="text-lg font-bold text-white">Users ({regularUsers.length})</h2>
+            </div>
+            <div className="space-y-3">
+              {regularUsers.map((regularUser) => (
+                <UserCard
+                  key={regularUser.uid}
+                  user={regularUser}
+                  currentUserId={user?.uid}
+                  isUpdating={isUpdating === regularUser.uid}
+                  isOnline={isOnline}
+                  onToggleAdmin={handleToggleAdmin}
+                />
+              ))}
+            </div>
           </div>
-          <div className="space-y-3">
-            {regularUsers.map((regularUser) => (
-              <UserCard
-                key={regularUser.uid}
-                user={regularUser}
-                currentUserId={user?.uid}
-                isUpdating={isUpdating === regularUser.uid}
-                isOnline={isOnline}
-                onToggleAdmin={handleToggleAdmin}
-              />
-            ))}
-          </div>
-        </div>
+        )}
 
-        {filteredUsers.length === 0 && !isLoading && (
+        {!isLoading && filteredUsers.length === 0 && (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
             <p className="text-slate-400">

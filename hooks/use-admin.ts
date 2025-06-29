@@ -12,39 +12,33 @@ export function useAdmin() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Initialize offline support
+    // Initialize offline support once
     initializeOfflineSupport()
   }, [])
 
   useEffect(() => {
-    if (user) {
-      setIsLoading(true)
-      setError(null)
-      
-      checkIsAdmin(user.uid)
-        .then(adminStatus => {
-          setIsAdmin(adminStatus)
-          // Cache the result
-          localStorage.setItem(`admin_status_${user.uid}`, JSON.stringify(adminStatus))
-        })
-        .catch(error => {
-          console.error('Error checking admin status:', error)
-          setError('Failed to check admin status')
-          
-          // Try to use cached value
-          const cached = localStorage.getItem(`admin_status_${user.uid}`)
-          if (cached) {
-            setIsAdmin(JSON.parse(cached))
-          }
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    } else {
+    if (!user) {
       setIsAdmin(false)
       setIsLoading(false)
       setError(null)
+      return
     }
+
+    // Set loading to false immediately if we have cached data
+    setIsLoading(true)
+    setError(null)
+    
+    // Check admin status (will return cached data immediately if available)
+    checkIsAdmin(user.uid)
+      .then(adminStatus => {
+        setIsAdmin(adminStatus)
+        setIsLoading(false)
+      })
+      .catch(error => {
+        console.error('Error checking admin status:', error)
+        setError('Failed to check admin status')
+        setIsLoading(false)
+      })
   }, [user])
 
   return { isAdmin, isLoading, error }
@@ -58,23 +52,20 @@ export function useMeetingStatus() {
   useEffect(() => {
     setError(null)
     
+    // Set up listener (will return cached data immediately if available)
     const unsubscribe = listenToMeetingStatus((status) => {
       setMeetingStatus(status)
       setIsLoading(false)
       setError(null)
     })
 
-    // Set a timeout to handle cases where the listener doesn't respond
+    // Shorter timeout for better UX
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.warn('Meeting status listener timeout, using cached data')
-        const cached = localStorage.getItem('meeting_status')
-        if (cached) {
-          setMeetingStatus(JSON.parse(cached))
-        }
+        console.warn('Meeting status listener timeout')
         setIsLoading(false)
       }
-    }, 5000)
+    }, 2000)
 
     return () => {
       unsubscribe()

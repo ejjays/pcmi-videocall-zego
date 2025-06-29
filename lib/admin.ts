@@ -7,57 +7,105 @@ import { AdminUser, MeetingStatus } from "@/types/admin"
 // Fixed meeting room ID
 export const FIXED_ROOM_ID = "kamustahan01"
 
-// Retry configuration
-const RETRY_ATTEMPTS = 3
-const RETRY_DELAY = 1000
+// Optimized retry configuration - less aggressive
+const RETRY_ATTEMPTS = 2
+const RETRY_DELAY = 500
 
-// Utility function to retry operations
+// Cache duration (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000
+
+// Cache management
+interface CacheItem<T> {
+  data: T
+  timestamp: number
+}
+
+function setCache<T>(key: string, data: T): void {
+  const cacheItem: CacheItem<T> = {
+    data,
+    timestamp: Date.now()
+  }
+  localStorage.setItem(key, JSON.stringify(cacheItem))
+}
+
+function getCache<T>(key: string): T | null {
+  try {
+    const cached = localStorage.getItem(key)
+    if (!cached) return null
+    
+    const cacheItem: CacheItem<T> = JSON.parse(cached)
+    
+    // Check if cache is still valid
+    if (Date.now() - cacheItem.timestamp > CACHE_DURATION) {
+      localStorage.removeItem(key)
+      return null
+    }
+    
+    return cacheItem.data
+  } catch {
+    return null
+  }
+}
+
+// Utility function to retry operations with exponential backoff
 async function retryOperation<T>(operation: () => Promise<T>, attempts = RETRY_ATTEMPTS): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await operation()
     } catch (error: any) {
-      console.warn(`Attempt ${i + 1} failed:`, error.message)
-      
-      // If it's an offline error, try to reconnect
-      if (error.code === 'unavailable' || error.message.includes('offline')) {
-        try {
-          if (db) {
-            await enableNetwork(db)
-            console.log('Network re-enabled')
-          }
-        } catch (networkError) {
-          console.warn('Failed to re-enable network:', networkError)
-        }
-      }
-      
       if (i === attempts - 1) throw error
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (i + 1)))
+      
+      // Only retry on network errors
+      if (error.code === 'unavailable' || error.message.includes('offline')) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)))
+      } else {
+        throw error // Don't retry on other errors
+      }
     }
   }
   throw new Error('All retry attempts failed')
 }
 
-// Check if user is admin with retry logic
+// Optimized admin status check with immediate cache return
 export async function checkIsAdmin(userId: string): Promise<boolean> {
-  if (!db || !userId) return false
+  if (!userId) return false
+  
+  const cacheKey = `admin_status_${userId}`
+  
+  // Return cached value immediately if available
+  const cached = getCache<boolean>(cacheKey)
+  if (cached !== null) {
+    // Optionally refresh in background
+    if (db && navigator.onLine) {
+      setTimeout(() => refreshAdminStatus(userId), 100)
+    }
+    return cached
+  }
+  
+  // If no cache, try to fetch
+  if (!db || !navigator.onLine) return false
   
   try {
-    return await retryOperation(async () => {
-      const userDoc = await getDoc(doc(db, "users", userId))
-      return userDoc.exists() ? userDoc.data()?.isAdmin === true : false
-    })
+    const userDoc = await getDoc(doc(db, "users", userId))
+    const isAdmin = userDoc.exists() ? userDoc.data()?.isAdmin === true : false
+    setCache(cacheKey, isAdmin)
+    return isAdmin
   } catch (error: any) {
-    // Check if cached value is available
-    const cached = localStorage.getItem(`admin_status_${userId}`)
-    if (cached) {
-      console.warn("Network unavailable, using cached admin status:", error.message)
-      return JSON.parse(cached)
-    }
-    
-    // Only log as error if no cached data is available
-    console.error("Error checking admin status:", error)
+    console.warn("Error checking admin status:", error.message)
     return false
+  }
+}
+
+// Background refresh for admin status
+async function refreshAdminStatus(userId: string): Promise<void> {
+  if (!db || !navigator.onLine) return
+  
+  try {
+    const userDoc = await getDoc(doc(db, "users", userId))
+    const isAdmin = userDoc.exists() ? userDoc.data()?.isAdmin === true : false
+    setCache(`admin_status_${userId}`, isAdmin)
+  } catch (error) {
+    // Silently fail background refresh
   }
 }
 
@@ -71,6 +119,9 @@ export async function makeUserAdmin(userId: string): Promise<void> {
       updatedAt: new Date().toISOString()
     })
   })
+  
+  // Update cache
+  setCache(`admin_status_${userId}`, true)
 }
 
 // Remove admin status with retry logic
@@ -83,35 +134,57 @@ export async function removeUserAdmin(userId: string): Promise<void> {
       updatedAt: new Date().toISOString()
     })
   })
+  
+  // Update cache
+  setCache(`admin_status_${userId}`, false)
 }
 
-// Get all users for admin management with retry logic
+// Optimized user fetching with immediate cache return
 export async function getAllUsers(): Promise<AdminUser[]> {
-  if (!db) return []
+  const cacheKey = 'all_users'
+  
+  // Return cached users immediately if available
+  const cached = getCache<AdminUser[]>(cacheKey)
+  if (cached !== null) {
+    // Optionally refresh in background
+    if (db && navigator.onLine) {
+      setTimeout(() => refreshUsers(), 100)
+    }
+    return cached
+  }
+  
+  // If no cache, try to fetch
+  if (!db || !navigator.onLine) return []
   
   try {
-    return await retryOperation(async () => {
-      const usersSnapshot = await getDocs(collection(db, "users"))
-      const users = usersSnapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
-      } as AdminUser))
-      
-      // Cache the result
-      localStorage.setItem('cached_users', JSON.stringify(users))
-      return users
-    })
-  } catch (error: any) {
-    // Check if cached users are available
-    const cached = localStorage.getItem('cached_users')
-    if (cached) {
-      console.warn("Network unavailable, using cached users data:", error.message)
-      return JSON.parse(cached)
-    }
+    const usersSnapshot = await getDocs(collection(db, "users"))
+    const users = usersSnapshot.docs.map(doc => ({
+      uid: doc.id,
+      ...doc.data()
+    } as AdminUser))
     
-    // Only log as error if no cached data is available
-    console.error("Error fetching users:", error)
+    setCache(cacheKey, users)
+    return users
+  } catch (error: any) {
+    console.warn("Error fetching users:", error.message)
     return []
+  }
+}
+
+// Background refresh for users
+async function refreshUsers(): Promise<void> {
+  if (!db || !navigator.onLine) return
+  
+  try {
+    const usersSnapshot = await getDocs(collection(db, "users"))
+    const users = usersSnapshot.docs.map(doc => ({
+      uid: doc.id,
+      ...doc.data()
+    } as AdminUser))
+    
+    setCache('all_users', users)
+  } catch (error) {
+    // Silently fail background refresh
   }
 }
 
@@ -132,8 +205,7 @@ export async function startMeeting(adminUserId: string, adminName: string): Prom
     await setDoc(doc(db, "meetings", FIXED_ROOM_ID), meetingData)
   })
   
-  // Cache the meeting status
-  localStorage.setItem('meeting_status', JSON.stringify(meetingData))
+  setCache('meeting_status', meetingData)
 }
 
 // End meeting with retry logic
@@ -151,112 +223,112 @@ export async function endMeeting(): Promise<void> {
   })
   
   // Update cache
-  const cached = localStorage.getItem('meeting_status')
+  const cached = getCache<MeetingStatus>('meeting_status')
   if (cached) {
-    const meetingData = JSON.parse(cached)
-    localStorage.setItem('meeting_status', JSON.stringify({ ...meetingData, ...endData }))
+    setCache('meeting_status', { ...cached, ...endData })
   }
 }
 
-// Update participant count with retry logic
+// Update participant count with optimistic updates
 export async function updateParticipantCount(count: number): Promise<void> {
-  if (!db) throw new Error("Database not available")
-  
   const updateData = {
     participantCount: count,
     lastUpdated: new Date().toISOString()
   }
   
-  try {
-    await retryOperation(async () => {
+  // Update cache immediately (optimistic update)
+  const cached = getCache<MeetingStatus>('meeting_status')
+  if (cached) {
+    setCache('meeting_status', { ...cached, ...updateData })
+  }
+  
+  // Try to update server in background
+  if (db && navigator.onLine) {
+    try {
       await updateDoc(doc(db, "meetings", FIXED_ROOM_ID), updateData)
-    })
-    
-    // Update cache
-    const cached = localStorage.getItem('meeting_status')
-    if (cached) {
-      const meetingData = JSON.parse(cached)
-      localStorage.setItem('meeting_status', JSON.stringify({ ...meetingData, ...updateData }))
+    } catch (error) {
+      console.warn('Failed to update participant count on server:', error)
     }
-  } catch (error) {
-    console.warn('Failed to update participant count, using local cache:', error)
   }
 }
 
-// Listen to meeting status changes with offline support
+// Optimized meeting status listener with immediate cache return
 export function listenToMeetingStatus(callback: (status: MeetingStatus | null) => void): () => void {
-  if (!db) {
-    // Try to use cached data
-    const cached = localStorage.getItem('meeting_status')
-    if (cached) {
-      callback(JSON.parse(cached))
-    } else {
-      callback(null)
-    }
+  // Return cached data immediately
+  const cached = getCache<MeetingStatus>('meeting_status')
+  if (cached) {
+    callback(cached)
+  }
+  
+  if (!db || !navigator.onLine) {
     return () => {}
   }
   
-  // Set up real-time listener
+  // Set up real-time listener with error handling
   const unsubscribe = onSnapshot(
     doc(db, "meetings", FIXED_ROOM_ID), 
     (doc) => {
       if (doc.exists()) {
         const status = doc.data() as MeetingStatus
+        setCache('meeting_status', status)
         callback(status)
-        // Cache the status
-        localStorage.setItem('meeting_status', JSON.stringify(status))
       } else {
-        callback(null)
         localStorage.removeItem('meeting_status')
+        callback(null)
       }
     }, 
     (error) => {
-      console.error("Error listening to meeting status:", error)
-      
-      // Fallback to cached data
-      const cached = localStorage.getItem('meeting_status')
-      if (cached) {
-        console.log('Using cached meeting status due to connection error')
-        callback(JSON.parse(cached))
-      } else {
-        callback(null)
-      }
+      console.warn("Meeting status listener error:", error.message)
+      // Don't call callback on error to avoid overriding cached data
     }
   )
   
   return unsubscribe
 }
 
-// Get meeting status with retry logic
+// Optimized meeting status getter with immediate cache return
 export async function getMeetingStatus(): Promise<MeetingStatus | null> {
-  if (!db) {
-    // Try cached data
-    const cached = localStorage.getItem('meeting_status')
-    return cached ? JSON.parse(cached) : null
+  const cacheKey = 'meeting_status'
+  
+  // Return cached value immediately if available
+  const cached = getCache<MeetingStatus>(cacheKey)
+  if (cached !== null) {
+    // Optionally refresh in background
+    if (db && navigator.onLine) {
+      setTimeout(() => refreshMeetingStatus(), 100)
+    }
+    return cached
   }
   
+  // If no cache, try to fetch
+  if (!db || !navigator.onLine) return null
+  
   try {
-    return await retryOperation(async () => {
-      const meetingDoc = await getDoc(doc(db, "meetings", FIXED_ROOM_ID))
-      if (meetingDoc.exists()) {
-        const status = meetingDoc.data() as MeetingStatus
-        // Cache the result
-        localStorage.setItem('meeting_status', JSON.stringify(status))
-        return status
-      }
-      return null
-    })
-  } catch (error: any) {
-    // Check if cached data is available
-    const cached = localStorage.getItem('meeting_status')
-    if (cached) {
-      console.warn("Network unavailable, using cached meeting status:", error.message)
-      return JSON.parse(cached)
+    const meetingDoc = await getDoc(doc(db, "meetings", FIXED_ROOM_ID))
+    if (meetingDoc.exists()) {
+      const status = meetingDoc.data() as MeetingStatus
+      setCache(cacheKey, status)
+      return status
     }
-    
-    // Only log as error if no cached data is available
-    console.error("Error getting meeting status:", error)
     return null
+  } catch (error: any) {
+    console.warn("Error getting meeting status:", error.message)
+    return null
+  }
+}
+
+// Background refresh for meeting status
+async function refreshMeetingStatus(): Promise<void> {
+  if (!db || !navigator.onLine) return
+  
+  try {
+    const meetingDoc = await getDoc(doc(db, "meetings", FIXED_ROOM_ID))
+    if (meetingDoc.exists()) {
+      const status = meetingDoc.data() as MeetingStatus
+      setCache('meeting_status', status)
+    }
+  } catch (error) {
+    // Silently fail background refresh
   }
 }
 
@@ -265,14 +337,11 @@ export function checkNetworkStatus(): boolean {
   return navigator.onLine
 }
 
-// Initialize offline support
+// Lightweight offline support initialization
 export function initializeOfflineSupport() {
-  // Listen for online/offline events
+  // Only set up basic event listeners
   window.addEventListener('online', () => {
     console.log('Network connection restored')
-    if (db) {
-      enableNetwork(db).catch(console.error)
-    }
   })
   
   window.addEventListener('offline', () => {
