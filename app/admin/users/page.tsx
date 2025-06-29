@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff, RefreshCw, Plus, Sync } from "lucide-react"
+import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff, RefreshCw, Plus, FolderSync as Sync } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus, syncFirebaseAuthUsers } from "@/lib/admin"
 import { AdminUser } from "@/types/admin"
