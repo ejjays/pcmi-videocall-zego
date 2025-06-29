@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
   console.log("--- VERCEL RUNTIME LOG: /api/admin/users GET ---");
   console.log("NEXT_PUBLIC_FIREBASE_PROJECT_ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'Loaded' : 'MISSING!');
   console.log("FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? 'Loaded' : 'MISSING!');
-  console.log("FIREBASE_PRIVATE_KEY_ID:", process.env.FIREBASE_PRIVATE_KEY_ID ? 'Loaded' : 'MISSING!');
-  console.log("FIREBASE_PRIVATE_KEY_BASE64:", process.env.FIREBASE_PRIVATE_KEY_BASE64 ? 'Loaded' : 'MISSING!');
+  // This is the important one for our new method:
+  console.log("FIREBASE_PRIVATE_KEY:", process.env.FIREBASE_PRIVATE_KEY ? 'Loaded' : 'MISSING!');
   // --- End of Debugging Code ---
 
   try {
@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
     console.log("--- VERCEL RUNTIME LOG: /api/admin/users POST ---");
     console.log("NEXT_PUBLIC_FIREBASE_PROJECT_ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'Loaded' : 'MISSING!');
     console.log("FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? 'Loaded' : 'MISSING!');
-    console.log("FIREBASE_PRIVATE_KEY_ID:", process.env.FIREBASE_PRIVATE_KEY_ID ? 'Loaded' : 'MISSING!');
-    console.log("FIREBASE_PRIVATE_KEY_BASE64:", process.env.FIREBASE_PRIVATE_KEY_BASE64 ? 'Loaded' : 'MISSING!');
+    // This is the important one for our new method:
+    console.log("FIREBASE_PRIVATE_KEY:", process.env.FIREBASE_PRIVATE_KEY ? 'Loaded' : 'MISSING!');
     // --- End of Debugging Code ---
 
   try {
