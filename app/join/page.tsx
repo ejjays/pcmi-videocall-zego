@@ -16,52 +16,56 @@ export default function JoinMeetingScreen() {
   const router = useRouter()
   const { animation } = useLoadingAnimation()
 
-  const validateMeetingId = (id: string) => {
-    // Basic validation for room ID format
-    if (!id.trim()) return false
+  // Fixed meeting room ID - same as home page
+  const FIXED_ROOM_ID = "kamustahan01"
 
-    // Check if it's a full URL
+  const validateMeetingId = (id: string) => {
+    // Accept the fixed room ID or empty (will default to fixed room)
+    if (!id.trim()) return true // Allow empty, will use default
+    
+    // Check if it matches our fixed room ID
+    if (id.trim().toLowerCase() === FIXED_ROOM_ID.toLowerCase()) return true
+    
+    // Check if it's a full URL with our room ID
     if (id.includes("/meeting?roomId=")) {
       const urlParams = new URLSearchParams(id.split("?")[1])
-      return urlParams.get("roomId") !== null
+      const roomIdFromUrl = urlParams.get("roomId")
+      return roomIdFromUrl?.toLowerCase() === FIXED_ROOM_ID.toLowerCase()
     }
 
-    // Check if it's just a room ID (should be at least 8 characters)
-    return id.trim().length >= 8
+    return false
   }
 
   const extractRoomId = (input: string) => {
     const trimmed = input.trim()
 
+    // If empty, use the fixed room ID
+    if (!trimmed) return FIXED_ROOM_ID
+
     // If it's a full URL, extract the roomId parameter
     if (trimmed.includes("/meeting?roomId=")) {
       const urlParams = new URLSearchParams(trimmed.split("?")[1])
-      return urlParams.get("roomId")
+      return urlParams.get("roomId") || FIXED_ROOM_ID
     }
 
-    // If it's just a room ID, return as is
-    return trimmed
+    // If it matches our fixed room ID, return it
+    if (trimmed.toLowerCase() === FIXED_ROOM_ID.toLowerCase()) {
+      return FIXED_ROOM_ID
+    }
+
+    // Default to fixed room ID
+    return FIXED_ROOM_ID
   }
 
   const handleJoin = async () => {
     setError("")
 
-    if (!validateMeetingId(meetingId)) {
-      setError("Please enter a valid meeting ID or link")
-      return
-    }
+    // Always use the fixed room ID
+    const roomId = FIXED_ROOM_ID
 
     setIsJoining(true)
 
     try {
-      const roomId = extractRoomId(meetingId)
-
-      if (!roomId) {
-        setError("Invalid meeting ID format")
-        setIsJoining(false)
-        return
-      }
-
       // Add a small delay for better UX
       setTimeout(() => {
         router.push(`/meeting?roomId=${encodeURIComponent(roomId)}`)
@@ -85,7 +89,7 @@ export default function JoinMeetingScreen() {
         <div className="max-w-md mx-auto">
           {/* Meeting ID Input */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-200 mb-2">Meeting ID or Link</label>
+            <label className="block text-sm font-medium text-slate-200 mb-2">Meeting ID (Optional)</label>
             <input
               type="text"
               value={meetingId}
@@ -93,7 +97,7 @@ export default function JoinMeetingScreen() {
                 setMeetingId(e.target.value)
                 setError("") // Clear error when user types
               }}
-              placeholder="Enter meeting ID or paste meeting link"
+              placeholder={`Enter "${FIXED_ROOM_ID}" or leave empty`}
               className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600/30 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 text-white placeholder-slate-400"
               disabled={isJoining}
             />
@@ -155,12 +159,8 @@ export default function JoinMeetingScreen() {
           {/* Join Button */}
           <button
             onClick={handleJoin}
-            disabled={!validateMeetingId(meetingId) || isJoining}
-            className={`w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-200 touch-manipulation shadow-xl ${
-              validateMeetingId(meetingId) && !isJoining
-                ? "bg-gradient-to-r from-emerald-500 to-cyan-500 text-white active:scale-95 hover:shadow-2xl"
-                : "bg-slate-700/50 text-slate-400 cursor-not-allowed border border-slate-600/30"
-            }`}
+            disabled={isJoining}
+            className="w-full py-4 px-6 rounded-2xl font-semibold text-lg transition-all duration-200 touch-manipulation shadow-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white active:scale-95 hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Join Meeting
           </button>
@@ -169,11 +169,17 @@ export default function JoinMeetingScreen() {
           <div className="mt-6 p-4 bg-slate-800/30 rounded-xl border border-slate-600/20">
             <h3 className="text-sm font-medium text-white mb-2">How to join:</h3>
             <ul className="text-xs text-slate-300 space-y-1">
-              <li>• Enter the meeting ID shared by the host</li>
-              <li>• Or paste the full meeting link</li>
+              <li>• Enter "{FIXED_ROOM_ID}" as the meeting ID</li>
+              <li>• Or leave the field empty to join the main room</li>
               <li>• Configure your camera and microphone settings</li>
               <li>• Click "Join Meeting" to enter the room</li>
             </ul>
+            
+            <div className="mt-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+              <p className="text-cyan-400 text-xs font-medium">
+                📍 Main Meeting Room: {FIXED_ROOM_ID}
+              </p>
+            </div>
           </div>
         </div>
       </main>

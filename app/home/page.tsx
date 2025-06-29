@@ -12,6 +12,9 @@ export default function HomeScreen() {
   const { user } = useAuth()
   const router = useRouter()
 
+  // Fixed meeting room ID - everyone joins the same room
+  const FIXED_ROOM_ID = "kamustahan01"
+
   const upcomingMeetings = [
     {
       id: 1,
@@ -57,9 +60,8 @@ export default function HomeScreen() {
           <div className="space-y-4 mb-8">
             <button
               onClick={() => {
-                // Generate a unique room ID and navigate to meeting
-                const roomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-                router.push(`/meeting?roomId=${roomId}`)
+                // Always use the same fixed room ID
+                router.push(`/meeting?roomId=${FIXED_ROOM_ID}`)
               }}
               className="block w-full bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl"
             >
@@ -70,7 +72,7 @@ export default function HomeScreen() {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white">New Meeting</h3>
-                    <p className="text-white/80 text-sm">Start an instant meeting</p>
+                    <p className="text-white/80 text-sm">Join the main meeting room</p>
                   </div>
                 </div>
                 <ChevronRight className="w-6 h-6 text-white/60" />
@@ -88,7 +90,7 @@ export default function HomeScreen() {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white">Join a Meeting</h3>
-                    <p className="text-slate-300 text-sm">Enter meeting ID or link</p>
+                    <p className="text-slate-300 text-sm">Enter meeting ID: {FIXED_ROOM_ID}</p>
                   </div>
                 </div>
                 <ChevronRight className="w-6 h-6 text-slate-400" />
@@ -124,7 +126,7 @@ export default function HomeScreen() {
 
                     {meeting.canStart ? (
                       <Link
-                        href="/meeting"
+                        href={`/meeting?roomId=${FIXED_ROOM_ID}`}
                         className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 active:scale-95 touch-manipulation shadow-lg hover:shadow-xl"
                       >
                         Start

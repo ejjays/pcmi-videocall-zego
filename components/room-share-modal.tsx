@@ -14,8 +14,9 @@ export default function RoomShareModal({ roomId, isOpen, onClose }: RoomShareMod
 
   if (!isOpen) return null
 
-  const meetingLink = `${window.location.origin}/join?roomId=${roomId}`
-  const shortRoomId = roomId.split("_")[2] || roomId
+  // Always use the fixed room ID
+  const FIXED_ROOM_ID = "kamustahan01"
+  const meetingLink = `${window.location.origin}/meeting?roomId=${FIXED_ROOM_ID}`
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -57,10 +58,10 @@ export default function RoomShareModal({ roomId, isOpen, onClose }: RoomShareMod
             <label className="block text-sm font-medium text-slate-200 mb-2">Meeting ID</label>
             <div className="flex items-center space-x-2">
               <div className="flex-1 px-3 py-2 bg-slate-700/50 border border-slate-600/30 rounded-lg">
-                <code className="text-white font-mono">{shortRoomId}</code>
+                <code className="text-white font-mono">{FIXED_ROOM_ID}</code>
               </div>
               <button
-                onClick={() => copyToClipboard(shortRoomId)}
+                onClick={() => copyToClipboard(FIXED_ROOM_ID)}
                 className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
               >
                 <Copy className="w-4 h-4 text-white" />
@@ -82,6 +83,14 @@ export default function RoomShareModal({ roomId, isOpen, onClose }: RoomShareMod
                 <Copy className="w-4 h-4 text-white" />
               </button>
             </div>
+          </div>
+
+          {/* Info Box */}
+          <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+            <p className="text-cyan-400 text-sm font-medium mb-1">📍 Main Meeting Room</p>
+            <p className="text-slate-300 text-xs">
+              Everyone joins the same room: {FIXED_ROOM_ID}
+            </p>
           </div>
 
           {/* Action Buttons */}
