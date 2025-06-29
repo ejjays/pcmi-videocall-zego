@@ -140,41 +140,43 @@ async function ensureUserDocumentExists(userId: string): Promise<void> {
     if (!userDoc.exists()) {
       console.log(`Creating missing Firestore document for user: ${userId}`)
       
-      // Try to get user info from Firebase Auth
-      let displayName = "Unknown User"
-      let email = ""
-      let photoURL = null
-      
-      // If this is the current user, we can get their info
-      if (auth.currentUser && auth.currentUser.uid === userId) {
-        displayName = auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Unknown User"
-        email = auth.currentUser.email || ""
-        photoURL = auth.currentUser.photoURL
+      // Try to sync this specific user via API
+      try {
+        const response = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sync-user', userId })
+        })
+        
+        if (response.ok) {
+          console.log(`✅ Synced user ${userId} via API`)
+        } else {
+          throw new Error('API sync failed')
+        }
+      } catch (apiError) {
+        console.warn('API sync failed, creating basic document:', apiError)
+        
+        // Fallback: create basic document
+        await setDoc(userDocRef, {
+          uid: userId,
+          email: "Unknown Email",
+          displayName: "Unknown User",
+          photoURL: null,
+          createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+          status: "offline",
+          isAdmin: false,
+          isLegacyUser: true,
+          legacyCreatedAt: new Date().toISOString()
+        })
       }
-      
-      // Create the document with available info
-      await setDoc(userDocRef, {
-        uid: userId,
-        email: email,
-        displayName: displayName,
-        photoURL: photoURL,
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-        status: "offline",
-        isAdmin: false,
-        // Mark as legacy user
-        isLegacyUser: true,
-        legacyCreatedAt: new Date().toISOString()
-      })
-      
-      console.log(`✅ Created Firestore document for legacy user: ${userId}`)
     }
   } catch (error) {
     console.warn(`Failed to ensure user document exists for ${userId}:`, error)
   }
 }
 
-// 🔥 UPDATED: Get all users from BOTH Firebase Auth AND Firestore
+// 🔥 UPDATED: Get all users using server-side API
 export async function getAllUsers(): Promise<AdminUser[]> {
   const cacheKey = 'all_users'
   
@@ -185,77 +187,107 @@ export async function getAllUsers(): Promise<AdminUser[]> {
     return cached
   }
   
-  // If no cache, try to fetch
-  if (!db || !navigator.onLine) {
-    console.log("🔌 Offline or no database - returning empty array")
+  // If no cache, try to fetch from API
+  if (!navigator.onLine) {
+    console.log("🔌 Offline - returning empty array")
     return []
   }
   
   try {
-    console.log("🔍 Fetching all users from Firestore...")
+    console.log("🔍 Fetching all users from API...")
     
-    // Get all users from Firestore
-    const usersSnapshot = await getDocs(collection(db, "users"))
-    const firestoreUsers = usersSnapshot.docs.map(doc => ({
-      uid: doc.id,
-      ...doc.data()
-    } as AdminUser))
+    const response = await fetch('/api/admin/users', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
     
-    console.log(`📊 Found ${firestoreUsers.length} users in Firestore`)
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`)
+    }
     
-    // 🔥 NEW: Also try to get users from Firebase Auth (if possible)
-    // Note: In client-side code, we can only access the current user
-    // But we'll create documents for any missing users when they're accessed
+    const data = await response.json()
     
-    // For now, let's work with what we have in Firestore
-    // and create missing documents when users are promoted/demoted
+    if (data.success) {
+      console.log(`✅ API returned ${data.users.length} users`)
+      setCache(cacheKey, data.users)
+      return data.users
+    } else {
+      throw new Error(data.error || 'API request failed')
+    }
     
-    const allUsers = firestoreUsers.map(user => ({
-      uid: user.uid,
-      email: user.email || "Unknown Email",
-      displayName: user.displayName || user.email?.split("@")[0] || "Unknown User",
-      photoURL: user.photoURL || null,
-      isAdmin: user.isAdmin === true,
-      createdAt: user.createdAt || new Date().toISOString(),
-      lastActive: user.lastActive || user.createdAt || new Date().toISOString(),
-      status: user.status || "offline",
-      isLegacyUser: user.isLegacyUser || false
-    }))
-    
-    console.log(`✅ Processed ${allUsers.length} total users`)
-    
-    setCache(cacheKey, allUsers)
-    return allUsers
   } catch (error: any) {
-    console.warn("❌ Error fetching users:", error.message)
-    return []
+    console.warn("❌ Error fetching users from API:", error.message)
+    
+    // Fallback to Firestore-only approach
+    try {
+      console.log("🔄 Falling back to Firestore-only approach...")
+      
+      if (!db) return []
+      
+      const usersSnapshot = await getDocs(collection(db, "users"))
+      const firestoreUsers = usersSnapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      } as AdminUser))
+      
+      console.log(`📊 Firestore fallback: Found ${firestoreUsers.length} users`)
+      
+      const allUsers = firestoreUsers.map(user => ({
+        uid: user.uid,
+        email: user.email || "Unknown Email",
+        displayName: user.displayName || user.email?.split("@")[0] || "Unknown User",
+        photoURL: user.photoURL || null,
+        isAdmin: user.isAdmin === true,
+        createdAt: user.createdAt || new Date().toISOString(),
+        lastActive: user.lastActive || user.createdAt || new Date().toISOString(),
+        status: user.status || "offline",
+        isLegacyUser: user.isLegacyUser || false
+      }))
+      
+      setCache(cacheKey, allUsers)
+      return allUsers
+      
+    } catch (firestoreError: any) {
+      console.warn("❌ Firestore fallback also failed:", firestoreError.message)
+      return []
+    }
   }
 }
 
-// 🔥 NEW: Create missing Firestore documents for existing Firebase Auth users
+// 🔥 NEW: Sync Firebase Auth users using server-side API
 export async function syncFirebaseAuthUsers(): Promise<void> {
-  if (!db || !auth) {
-    console.log("🔌 Database or Auth not available for sync")
+  if (!navigator.onLine) {
+    console.log("🔌 Offline - cannot sync users")
     return
   }
   
   try {
-    console.log("🔄 Starting Firebase Auth users sync...")
+    console.log("🔄 Starting Firebase Auth users sync via API...")
     
-    // Note: In client-side code, we can only access the current authenticated user
-    // We can't list all Firebase Auth users from the client
-    // This function will be called when users sign in to ensure their documents exist
+    const response = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sync-all' })
+    })
     
-    if (auth.currentUser) {
-      await ensureUserDocumentExists(auth.currentUser.uid)
-      console.log("✅ Ensured current user document exists")
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`)
     }
     
-    // Clear cache to force refresh
-    localStorage.removeItem('all_users')
+    const data = await response.json()
+    
+    if (data.success) {
+      console.log(`✅ API sync completed: ${data.message}`)
+      
+      // Clear cache to force refresh
+      localStorage.removeItem('all_users')
+    } else {
+      throw new Error(data.error || 'API sync failed')
+    }
     
   } catch (error) {
     console.warn("❌ Error syncing Firebase Auth users:", error)
+    throw error
   }
 }
 

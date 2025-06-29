@@ -84,7 +84,7 @@ export default function AdminUsersPage() {
       
       if (allUsers.length === 0) {
         if (isOnline) {
-          showToast("No users found. This might be because your existing accounts don't have Firestore documents yet. Try the 'Sync Users' button!", 'info')
+          showToast("🔥 No users found! Your Firebase Auth users need to be synced to Firestore. Click the SYNC button!", 'info')
         } else {
           showToast("No cached user data available", 'info')
         }
@@ -93,14 +93,14 @@ export default function AdminUsersPage() {
         const newCount = allUsers.length - legacyCount
         
         if (legacyCount > 0) {
-          showToast(`Loaded ${allUsers.length} users (${newCount} new, ${legacyCount} legacy)! 📊`, 'success')
+          showToast(`🎉 Loaded ${allUsers.length} users (${newCount} new, ${legacyCount} legacy)! 📊`, 'success')
         } else {
-          showToast(`Loaded ${allUsers.length} users successfully! 📊`, 'success')
+          showToast(`🎉 Loaded ${allUsers.length} users successfully! 📊`, 'success')
         }
       }
     } catch (error: any) {
       console.error("Error loading users:", error)
-      showToast("Failed to load users", 'error')
+      showToast("Failed to load users. Try clicking the SYNC button!", 'error')
     } finally {
       setIsLoading(false)
     }
@@ -117,18 +117,20 @@ export default function AdminUsersPage() {
     
     try {
       console.log("🔄 Starting user sync...")
+      showToast("🔄 Syncing Firebase Auth users to Firestore...", 'info')
+      
       await syncFirebaseAuthUsers()
       
       // Wait a moment for sync to complete
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 1500))
       
       // Reload users
       await loadUsers()
       
-      showToast("User sync completed! All Firebase Auth users should now be visible. 🔄✨", 'success')
+      showToast("🎉 User sync completed! All Firebase Auth users should now be visible! ✨", 'success')
     } catch (error: any) {
       console.error("Error syncing users:", error)
-      showToast("Failed to sync users", 'error')
+      showToast("❌ Failed to sync users. Check console for details.", 'error')
     } finally {
       setIsSyncing(false)
     }
@@ -201,14 +203,15 @@ export default function AdminUsersPage() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            {/* 🔥 NEW: Sync Users Button */}
+            {/* 🔥 PROMINENT SYNC BUTTON */}
             <button
               onClick={handleSyncUsers}
               disabled={isSyncing || !isOnline}
-              className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation disabled:opacity-50"
+              className="px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-medium transition-all duration-200 active:scale-95 disabled:opacity-50 flex items-center"
               title="Sync Firebase Auth users to Firestore"
             >
-              <Sync className={`w-5 h-5 text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+              <Sync className={`w-4 h-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'SYNC'}
             </button>
             <button
               onClick={loadUsers}
@@ -240,6 +243,22 @@ export default function AdminUsersPage() {
                 <div>
                   <p className="text-orange-400 font-medium text-sm">Offline Mode</p>
                   <p className="text-orange-300 text-xs">Showing cached data. Admin changes disabled.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🔥 SYNC INSTRUCTIONS BANNER */}
+          {users.length === 0 && isOnline && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+              <div className="flex items-center">
+                <Sync className="w-6 h-6 text-blue-400 mr-3" />
+                <div>
+                  <p className="text-blue-400 font-medium text-sm mb-1">🔥 Firebase Auth Users Found!</p>
+                  <p className="text-blue-300 text-xs leading-relaxed">
+                    Your Firebase Authentication has users, but they need to be synced to Firestore to appear here. 
+                    <strong className="text-blue-200"> Click the SYNC button above!</strong>
+                  </p>
                 </div>
               </div>
             </div>
@@ -309,7 +328,7 @@ export default function AdminUsersPage() {
                   </code>
                 </p>
                 <p className="text-slate-400 text-xs mt-1">
-                  💡 If you don't see your old accounts, click the sync button above!
+                  💡 If you don't see your old accounts, click the SYNC button above!
                 </p>
               </div>
             </div>
@@ -332,7 +351,7 @@ export default function AdminUsersPage() {
               <h3 className="text-xl font-bold text-white mb-2">No Users Found</h3>
               <p className="text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">
                 {isOnline 
-                  ? "This might be because your existing Firebase Auth users don't have Firestore documents yet. Try clicking the sync button above!"
+                  ? "🔥 Your Firebase Auth users need to be synced to Firestore! Click the SYNC button above to import all your existing users."
                   : "No cached user data available. Connect to the internet to load users."
                 }
               </p>
@@ -342,13 +361,13 @@ export default function AdminUsersPage() {
                   <button
                     onClick={handleSyncUsers}
                     disabled={isSyncing}
-                    className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95 inline-flex items-center disabled:opacity-50"
+                    className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-8 py-4 rounded-xl font-medium transition-all duration-200 active:scale-95 inline-flex items-center disabled:opacity-50 text-lg"
                   >
-                    <Sync className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Syncing...' : 'Sync Existing Users'}
+                    <Sync className={`w-5 h-5 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing Users...' : '🔥 SYNC ALL USERS NOW'}
                   </button>
                   <p className="text-slate-500 text-xs">
-                    💡 This will create Firestore documents for your existing Firebase Auth users
+                    💡 This will import all your Firebase Authentication users to the admin panel
                   </p>
                 </div>
               )}
