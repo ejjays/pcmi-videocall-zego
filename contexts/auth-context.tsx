@@ -41,8 +41,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      (user) => {
+      async (user) => {
         console.log("Auth state changed:", user ? `User: ${user.email}` : "No user")
+        
+        if (user) {
+          // Ensure user document exists in Firestore
+          await ensureUserDocument(user)
+        }
+        
         setUser(user)
         setLoading(false)
       },
@@ -64,12 +70,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Ensure user document exists in Firestore
+  const ensureUserDocument = async (user: User) => {
+    if (!db) {
+      console.warn("Firestore not available, skipping user document creation")
+      return
+    }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      const userDoc = await getDoc(userDocRef)
+      
+      if (!userDoc.exists()) {
+        console.log("Creating user document for:", user.email)
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email?.split("@")[0] || "User",
+          photoURL: user.photoURL || null,
+          createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+          status: "online",
+          isAdmin: false, // Default to non-admin
+        })
+        console.log("✅ User document created successfully")
+      } else {
+        // Update last active time
+        await setDoc(userDocRef, {
+          lastActive: new Date().toISOString(),
+          status: "online"
+        }, { merge: true })
+        console.log("✅ User last active time updated")
+      }
+    } catch (error) {
+      console.warn("Failed to ensure user document:", error)
+    }
+  }
+
   const signIn = async (email: string, password: string) => {
     if (!auth) throw new Error("Firebase auth not initialized")
 
     console.log("Signing in user:", email)
     const result = await signInWithEmailAndPassword(auth, email, password)
     console.log("Sign in successful:", result.user.uid)
+    
+    // Ensure user document exists
+    await ensureUserDocument(result.user)
   }
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -81,18 +127,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("Updating user profile...")
     await updateProfile(user, { displayName: fullName })
 
-    // Try to create Firestore document if available
+    // Create Firestore document
     if (db) {
       try {
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
           email: user.email,
           displayName: fullName,
+          photoURL: null,
           createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
           status: "online",
           isAdmin: false, // Default to non-admin
         })
-        console.log("User document created in Firestore")
+        console.log("✅ User document created in Firestore")
       } catch (error) {
         console.warn("Failed to create Firestore document:", error)
       }
@@ -108,32 +156,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const provider = new GoogleAuthProvider()
     const { user } = await signInWithPopup(auth, provider)
 
-    // Try to create/update Firestore document if available
-    if (db) {
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, "users", user.uid), {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            createdAt: new Date().toISOString(),
-            status: "online",
-            isAdmin: false, // Default to non-admin
-          })
-          console.log("Google user document created in Firestore")
-        }
-      } catch (error) {
-        console.warn("Failed to create/check Firestore document:", error)
-      }
-    }
+    // Ensure user document exists
+    await ensureUserDocument(user)
 
     console.log("Google sign in successful:", user.uid)
   }
 
   const logout = async () => {
     if (!auth) throw new Error("Firebase auth not initialized")
+
+    // Update user status to offline before signing out
+    if (user && db) {
+      try {
+        await setDoc(doc(db, "users", user.uid), {
+          status: "offline",
+          lastActive: new Date().toISOString()
+        }, { merge: true })
+      } catch (error) {
+        console.warn("Failed to update user status on logout:", error)
+      }
+    }
 
     console.log("Signing out user")
     await signOut(auth)

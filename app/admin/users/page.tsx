@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff } from "lucide-react"
+import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff, RefreshCw, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus } from "@/lib/admin"
 import { AdminUser } from "@/types/admin"
@@ -79,8 +79,14 @@ export default function AdminUsersPage() {
       const allUsers = await getAllUsers()
       setUsers(allUsers)
       
-      if (allUsers.length === 0 && !isOnline) {
-        showToast("No cached user data available", 'info')
+      if (allUsers.length === 0) {
+        if (isOnline) {
+          showToast("No users found in database. Users will appear here after they sign up.", 'info')
+        } else {
+          showToast("No cached user data available", 'info')
+        }
+      } else {
+        showToast(`Loaded ${allUsers.length} users successfully! 📊`, 'success')
       }
     } catch (error: any) {
       console.error("Error loading users:", error)
@@ -156,7 +162,13 @@ export default function AdminUsersPage() {
               )}
             </div>
           </div>
-          <div className="w-10" />
+          <button
+            onClick={loadUsers}
+            disabled={isLoading}
+            className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 text-slate-300 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         <div className="p-4 space-y-6">
@@ -246,6 +258,37 @@ export default function AdminUsersPage() {
             </div>
           )}
 
+          {/* No Users State */}
+          {!isLoading && users.length === 0 && (
+            <div className="text-center py-12">
+              <div className="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="w-10 h-10 text-slate-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">No Users Found</h3>
+              <p className="text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">
+                {isOnline 
+                  ? "Users will appear here after they create accounts. Try signing up with a new account to test the admin panel!"
+                  : "No cached user data available. Connect to the internet to load users."
+                }
+              </p>
+              
+              {isOnline && (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => router.push("/auth")}
+                    className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95 inline-flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Test Account
+                  </button>
+                  <p className="text-slate-500 text-xs">
+                    💡 Tip: Create multiple accounts to test admin features
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Administrators Section */}
           {!isLoading && adminUsers.length > 0 && (
             <div>
@@ -269,7 +312,7 @@ export default function AdminUsersPage() {
           )}
 
           {/* Regular Users Section */}
-          {!isLoading && (
+          {!isLoading && regularUsers.length > 0 && (
             <div>
               <div className="flex items-center mb-4">
                 <Users className="w-5 h-5 text-blue-400 mr-2" />
@@ -290,12 +333,12 @@ export default function AdminUsersPage() {
             </div>
           )}
 
-          {!isLoading && filteredUsers.length === 0 && (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400">
-                {isOnline ? "No users found" : "No cached user data available"}
-              </p>
+          {/* No Search Results */}
+          {!isLoading && users.length > 0 && filteredUsers.length === 0 && (
+            <div className="text-center py-8">
+              <Search className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-400">No users match your search</p>
+              <p className="text-slate-500 text-sm">Try a different search term</p>
             </div>
           )}
         </div>
