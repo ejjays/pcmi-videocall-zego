@@ -7,7 +7,7 @@ import ProtectedRoute from "@/components/protected-route"
 import { useAuth } from "@/contexts/auth-context"
 import { useMeetingStatus } from "@/hooks/use-admin"
 import { startMeeting, FIXED_ROOM_ID } from "@/lib/admin"
-import { Video, Plus, Calendar, ChevronRight, Users, Settings, Sparkles } from "lucide-react"
+import { Video, Plus, Calendar, ChevronRight, Users, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
@@ -128,25 +128,6 @@ export default function HomeScreen() {
             <p className="text-slate-300">Ready for the Word of God?</p>
           </div>
 
-          {/* Admin Panel Link - Available to all users for testing */}
-          <Link
-            href="/admin/users"
-            className="block w-full bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl mb-6"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-3 backdrop-blur-sm">
-                  <Settings className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Admin Panel</h3>
-                  <p className="text-white/80 text-sm">Manage users and permissions (Testing)</p>
-                </div>
-              </div>
-              <ChevronRight className="w-6 h-6 text-white/60" />
-            </div>
-          </Link>
-
           {/* Quick Actions */}
           <div className="space-y-4 mb-8">
             <button
@@ -172,7 +153,7 @@ export default function HomeScreen() {
               onClick={handleJoinMeeting}
               className={`block w-full rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation border ${
                 meetingStatus?.isActive
-                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-emerald-500/25 animate-pulse border-emerald-400/50"
+                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 animate-breathing-glow border-emerald-400/50"
                   : "bg-gradient-to-br from-slate-800 to-slate-700 border-slate-600/30 hover:from-slate-700 hover:to-slate-600"
               }`}
             >
@@ -205,7 +186,7 @@ export default function HomeScreen() {
                 </div>
                 <div className="flex items-center">
                   {meetingStatus?.isActive && (
-                    <div className="w-3 h-3 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                    <div className="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
                   )}
                   <ChevronRight className={`w-6 h-6 ${
                     meetingStatus?.isActive ? "text-white/60" : "text-slate-400"
@@ -226,7 +207,7 @@ export default function HomeScreen() {
                   </p>
                 </div>
                 <div className={`w-3 h-3 rounded-full ${
-                  meetingStatus.isActive ? "bg-green-500 animate-pulse" : "bg-gray-500"
+                  meetingStatus.isActive ? "bg-green-500" : "bg-gray-500"
                 }`}></div>
               </div>
             </div>
