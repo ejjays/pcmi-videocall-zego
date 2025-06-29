@@ -6,6 +6,9 @@ export interface AdminUser {
   isAdmin: boolean
   createdAt: string
   lastActive?: string
+  status?: string
+  isLegacyUser?: boolean // 🔥 NEW: Flag for users created before Firestore integration
+  legacyCreatedAt?: string // 🔥 NEW: When the legacy user was synced
 }
 
 export interface MeetingStatus {

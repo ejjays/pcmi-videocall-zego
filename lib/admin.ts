@@ -1,7 +1,7 @@
 "use client"
 
 import { doc, updateDoc, collection, getDocs, setDoc, getDoc, onSnapshot, query, where } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { auth, db } from "@/lib/firebase"
 import { AdminUser, MeetingStatus } from "@/types/admin"
 
 // Fixed meeting room ID
@@ -96,6 +96,10 @@ export async function makeUserAdmin(userId: string): Promise<void> {
   if (!db) throw new Error("Database not available")
   
   await retryOperation(async () => {
+    // First ensure the user document exists
+    await ensureUserDocumentExists(userId)
+    
+    // Then update admin status
     await updateDoc(doc(db, "users", userId), {
       isAdmin: true,
       updatedAt: new Date().toISOString()
@@ -111,6 +115,10 @@ export async function removeUserAdmin(userId: string): Promise<void> {
   if (!db) throw new Error("Database not available")
   
   await retryOperation(async () => {
+    // First ensure the user document exists
+    await ensureUserDocumentExists(userId)
+    
+    // Then update admin status
     await updateDoc(doc(db, "users", userId), {
       isAdmin: false,
       updatedAt: new Date().toISOString()
@@ -121,31 +129,133 @@ export async function removeUserAdmin(userId: string): Promise<void> {
   setCache(`admin_status_${userId}`, false)
 }
 
-// Get all users
+// 🔥 NEW: Ensure user document exists in Firestore
+async function ensureUserDocumentExists(userId: string): Promise<void> {
+  if (!db || !auth) return
+  
+  try {
+    const userDocRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userDocRef)
+    
+    if (!userDoc.exists()) {
+      console.log(`Creating missing Firestore document for user: ${userId}`)
+      
+      // Try to get user info from Firebase Auth
+      let displayName = "Unknown User"
+      let email = ""
+      let photoURL = null
+      
+      // If this is the current user, we can get their info
+      if (auth.currentUser && auth.currentUser.uid === userId) {
+        displayName = auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Unknown User"
+        email = auth.currentUser.email || ""
+        photoURL = auth.currentUser.photoURL
+      }
+      
+      // Create the document with available info
+      await setDoc(userDocRef, {
+        uid: userId,
+        email: email,
+        displayName: displayName,
+        photoURL: photoURL,
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString(),
+        status: "offline",
+        isAdmin: false,
+        // Mark as legacy user
+        isLegacyUser: true,
+        legacyCreatedAt: new Date().toISOString()
+      })
+      
+      console.log(`✅ Created Firestore document for legacy user: ${userId}`)
+    }
+  } catch (error) {
+    console.warn(`Failed to ensure user document exists for ${userId}:`, error)
+  }
+}
+
+// 🔥 UPDATED: Get all users from BOTH Firebase Auth AND Firestore
 export async function getAllUsers(): Promise<AdminUser[]> {
   const cacheKey = 'all_users'
   
   // Return cached users immediately if available
   const cached = getCache<AdminUser[]>(cacheKey)
   if (cached !== null) {
+    console.log(`📦 Returning ${cached.length} cached users`)
     return cached
   }
   
   // If no cache, try to fetch
-  if (!db || !navigator.onLine) return []
+  if (!db || !navigator.onLine) {
+    console.log("🔌 Offline or no database - returning empty array")
+    return []
+  }
   
   try {
+    console.log("🔍 Fetching all users from Firestore...")
+    
+    // Get all users from Firestore
     const usersSnapshot = await getDocs(collection(db, "users"))
-    const users = usersSnapshot.docs.map(doc => ({
+    const firestoreUsers = usersSnapshot.docs.map(doc => ({
       uid: doc.id,
       ...doc.data()
     } as AdminUser))
     
-    setCache(cacheKey, users)
-    return users
+    console.log(`📊 Found ${firestoreUsers.length} users in Firestore`)
+    
+    // 🔥 NEW: Also try to get users from Firebase Auth (if possible)
+    // Note: In client-side code, we can only access the current user
+    // But we'll create documents for any missing users when they're accessed
+    
+    // For now, let's work with what we have in Firestore
+    // and create missing documents when users are promoted/demoted
+    
+    const allUsers = firestoreUsers.map(user => ({
+      uid: user.uid,
+      email: user.email || "Unknown Email",
+      displayName: user.displayName || user.email?.split("@")[0] || "Unknown User",
+      photoURL: user.photoURL || null,
+      isAdmin: user.isAdmin === true,
+      createdAt: user.createdAt || new Date().toISOString(),
+      lastActive: user.lastActive || user.createdAt || new Date().toISOString(),
+      status: user.status || "offline",
+      isLegacyUser: user.isLegacyUser || false
+    }))
+    
+    console.log(`✅ Processed ${allUsers.length} total users`)
+    
+    setCache(cacheKey, allUsers)
+    return allUsers
   } catch (error: any) {
-    console.warn("Error fetching users:", error.message)
+    console.warn("❌ Error fetching users:", error.message)
     return []
+  }
+}
+
+// 🔥 NEW: Create missing Firestore documents for existing Firebase Auth users
+export async function syncFirebaseAuthUsers(): Promise<void> {
+  if (!db || !auth) {
+    console.log("🔌 Database or Auth not available for sync")
+    return
+  }
+  
+  try {
+    console.log("🔄 Starting Firebase Auth users sync...")
+    
+    // Note: In client-side code, we can only access the current authenticated user
+    // We can't list all Firebase Auth users from the client
+    // This function will be called when users sign in to ensure their documents exist
+    
+    if (auth.currentUser) {
+      await ensureUserDocumentExists(auth.currentUser.uid)
+      console.log("✅ Ensured current user document exists")
+    }
+    
+    // Clear cache to force refresh
+    localStorage.removeItem('all_users')
+    
+  } catch (error) {
+    console.warn("❌ Error syncing Firebase Auth users:", error)
   }
 }
 

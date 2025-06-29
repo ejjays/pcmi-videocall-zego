@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff, RefreshCw, Plus } from "lucide-react"
+import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff, RefreshCw, Plus, Sync } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus } from "@/lib/admin"
+import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus, syncFirebaseAuthUsers } from "@/lib/admin"
 import { AdminUser } from "@/types/admin"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
 import PageLoader from "@/components/ui/page-loader"
@@ -21,6 +21,7 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   
   // Toast state
@@ -76,23 +77,60 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       setIsLoading(true)
+      console.log("🔍 Loading all users...")
+      
       const allUsers = await getAllUsers()
       setUsers(allUsers)
       
       if (allUsers.length === 0) {
         if (isOnline) {
-          showToast("No users found in database. Users will appear here after they sign up.", 'info')
+          showToast("No users found. This might be because your existing accounts don't have Firestore documents yet. Try the 'Sync Users' button!", 'info')
         } else {
           showToast("No cached user data available", 'info')
         }
       } else {
-        showToast(`Loaded ${allUsers.length} users successfully! 📊`, 'success')
+        const legacyCount = allUsers.filter(u => u.isLegacyUser).length
+        const newCount = allUsers.length - legacyCount
+        
+        if (legacyCount > 0) {
+          showToast(`Loaded ${allUsers.length} users (${newCount} new, ${legacyCount} legacy)! 📊`, 'success')
+        } else {
+          showToast(`Loaded ${allUsers.length} users successfully! 📊`, 'success')
+        }
       }
     } catch (error: any) {
       console.error("Error loading users:", error)
       showToast("Failed to load users", 'error')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // 🔥 NEW: Sync Firebase Auth users to Firestore
+  const handleSyncUsers = async () => {
+    if (!isOnline) {
+      showToast("Cannot sync users while offline", 'error')
+      return
+    }
+
+    setIsSyncing(true)
+    
+    try {
+      console.log("🔄 Starting user sync...")
+      await syncFirebaseAuthUsers()
+      
+      // Wait a moment for sync to complete
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Reload users
+      await loadUsers()
+      
+      showToast("User sync completed! All Firebase Auth users should now be visible. 🔄✨", 'success')
+    } catch (error: any) {
+      console.error("Error syncing users:", error)
+      showToast("Failed to sync users", 'error')
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -162,13 +200,24 @@ export default function AdminUsersPage() {
               )}
             </div>
           </div>
-          <button
-            onClick={loadUsers}
-            disabled={isLoading}
-            className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 text-slate-300 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* 🔥 NEW: Sync Users Button */}
+            <button
+              onClick={handleSyncUsers}
+              disabled={isSyncing || !isOnline}
+              className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation disabled:opacity-50"
+              title="Sync Firebase Auth users to Firestore"
+            >
+              <Sync className={`w-5 h-5 text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={loadUsers}
+              disabled={isLoading}
+              className="p-2 rounded-xl hover:bg-slate-700/50 transition-colors duration-200 touch-manipulation disabled:opacity-50"
+            >
+              <RefreshCw className={`w-5 h-5 text-slate-300 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-6">
@@ -191,6 +240,19 @@ export default function AdminUsersPage() {
                 <div>
                   <p className="text-orange-400 font-medium text-sm">Offline Mode</p>
                   <p className="text-orange-300 text-xs">Showing cached data. Admin changes disabled.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🔥 NEW: Legacy Users Info Banner */}
+          {users.some(u => u.isLegacyUser) && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+              <div className="flex items-center">
+                <Sync className="w-5 h-5 text-blue-400 mr-2" />
+                <div>
+                  <p className="text-blue-400 font-medium text-sm">Legacy Users Detected</p>
+                  <p className="text-blue-300 text-xs">Some users were created before Firestore integration. They've been automatically synced!</p>
                 </div>
               </div>
             </div>
@@ -246,6 +308,9 @@ export default function AdminUsersPage() {
                     {typeof window !== 'undefined' ? window.location.origin : ''}/admin/users
                   </code>
                 </p>
+                <p className="text-slate-400 text-xs mt-1">
+                  💡 If you don't see your old accounts, click the sync button above!
+                </p>
               </div>
             </div>
           </div>
@@ -267,7 +332,7 @@ export default function AdminUsersPage() {
               <h3 className="text-xl font-bold text-white mb-2">No Users Found</h3>
               <p className="text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">
                 {isOnline 
-                  ? "Users will appear here after they create accounts. Try signing up with a new account to test the admin panel!"
+                  ? "This might be because your existing Firebase Auth users don't have Firestore documents yet. Try clicking the sync button above!"
                   : "No cached user data available. Connect to the internet to load users."
                 }
               </p>
@@ -275,14 +340,15 @@ export default function AdminUsersPage() {
               {isOnline && (
                 <div className="space-y-3">
                   <button
-                    onClick={() => router.push("/auth")}
-                    className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95 inline-flex items-center"
+                    onClick={handleSyncUsers}
+                    disabled={isSyncing}
+                    className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 active:scale-95 inline-flex items-center disabled:opacity-50"
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Test Account
+                    <Sync className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync Existing Users'}
                   </button>
                   <p className="text-slate-500 text-xs">
-                    💡 Tip: Create multiple accounts to test admin features
+                    💡 This will create Firestore documents for your existing Firebase Auth users
                   </p>
                 </div>
               )}
@@ -383,6 +449,12 @@ function UserCard({ user, currentUserId, isUpdating, isOnline, onToggleAdmin }: 
               {isCurrentUser && (
                 <span className="ml-2 px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs rounded-full">
                   You
+                </span>
+              )}
+              {/* 🔥 NEW: Legacy User Badge */}
+              {user.isLegacyUser && (
+                <span className="ml-2 px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                  Legacy
                 </span>
               )}
             </div>

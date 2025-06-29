@@ -14,6 +14,7 @@ import {
 } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
+import { syncFirebaseAuthUsers } from "@/lib/admin"
 
 interface AuthContextType {
   user: User | null
@@ -52,6 +53,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (user) {
           ensureUserDocument(user).catch(error => {
             console.warn("Background user document creation failed:", error)
+          })
+          
+          // 🔥 NEW: Sync Firebase Auth users to ensure all users are visible in admin panel
+          syncFirebaseAuthUsers().catch(error => {
+            console.warn("Background user sync failed:", error)
           })
         }
       },
