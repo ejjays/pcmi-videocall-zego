@@ -10,6 +10,8 @@ import { db } from "@/lib/firebase"
 import ProtectedRoute from "@/components/protected-route"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
 import PageLoader from "@/components/ui/page-loader"
+import ImageCropper from "@/components/ui/image-cropper"
+import ToastNotification from "@/components/ui/toast-notification"
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -20,11 +22,19 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editField, setEditField] = useState<'name' | 'email' | 'phone'>('name')
   const [profileImageData, setProfileImageData] = useState<string | null>(null)
+  const [showImageCropper, setShowImageCropper] = useState(false)
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState<string>("")
+  
+  // Toast notification state
+  const [toast, setToast] = useState({
+    isVisible: false,
+    message: "",
+    type: 'success' as 'success' | 'error' | 'info'
+  })
   
   const [formData, setFormData] = useState({
     displayName: user?.displayName || "",
@@ -34,6 +44,20 @@ export default function ProfilePage() {
     newPassword: "",
     confirmPassword: ""
   })
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({
+      isVisible: true,
+      message,
+      type
+    })
+  }
+
+  // Hide toast notification
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, isVisible: false }))
+  }
 
   const handleProfilePictureClick = () => {
     fileInputRef.current?.click()
@@ -45,59 +69,67 @@ export default function ProfilePage() {
 
     // Validate file size (limit to 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError("Image file size must be less than 5MB")
+      showToast("Image file size must be less than 5MB", 'error')
       return
     }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      setError("Please select a valid image file")
+      showToast("Please select a valid image file", 'error')
       return
     }
 
-    setIsUpdating(true)
     setError("")
-    setSuccess("")
 
     try {
-      // Create a data URL for local display
+      // Create a data URL for cropping
       const reader = new FileReader()
-      reader.onload = async (e) => {
+      reader.onload = (e) => {
         const dataUrl = e.target?.result as string
-        
-        // Store the image data locally for display
-        setProfileImageData(dataUrl)
-        
-        // For Firebase Auth, we'll use a placeholder URL or skip updating photoURL
-        // and rely on local storage for the profile image display
-        try {
-          // Update Firestore with the image data (if available)
-          if (db) {
-            await updateDoc(doc(db, "users", user.uid), {
-              profileImageData: dataUrl,
-              updatedAt: new Date().toISOString()
-            })
-          }
-
-          // Store in localStorage as backup
-          localStorage.setItem(`profile_image_${user.uid}`, dataUrl)
-
-          setSuccess("Profile picture updated successfully!")
-          setTimeout(() => setSuccess(""), 3000)
-        } catch (error) {
-          console.warn("Failed to update profile image:", error)
-          // Still store locally even if Firestore fails
-          localStorage.setItem(`profile_image_${user.uid}`, dataUrl)
-          setSuccess("Profile picture updated locally!")
-          setTimeout(() => setSuccess(""), 3000)
-        }
+        setSelectedImageForCrop(dataUrl)
+        setShowImageCropper(true)
       }
       reader.readAsDataURL(file)
     } catch (error: any) {
-      setError(error.message || "Failed to update profile picture")
+      showToast(error.message || "Failed to load image", 'error')
+    }
+  }
+
+  const handleCropComplete = async (croppedImage: string) => {
+    if (!user) return
+
+    setIsUpdating(true)
+    setShowImageCropper(false)
+
+    try {
+      // Store the cropped image data locally for display
+      setProfileImageData(croppedImage)
+      
+      // Update Firestore with the image data (if available)
+      if (db) {
+        await updateDoc(doc(db, "users", user.uid), {
+          profileImageData: croppedImage,
+          updatedAt: new Date().toISOString()
+        })
+      }
+
+      // Store in localStorage as backup
+      localStorage.setItem(`profile_image_${user.uid}`, croppedImage)
+
+      showToast("Profile picture updated successfully! ✨")
+    } catch (error) {
+      console.warn("Failed to update profile image:", error)
+      // Still store locally even if Firestore fails
+      localStorage.setItem(`profile_image_${user.uid}`, croppedImage)
+      showToast("Profile picture updated locally! 📱")
     } finally {
       setIsUpdating(false)
     }
+  }
+
+  const handleCropCancel = () => {
+    setShowImageCropper(false)
+    setSelectedImageForCrop("")
   }
 
   // Load profile image from localStorage on component mount
@@ -115,7 +147,6 @@ export default function ProfilePage() {
 
     setIsUpdating(true)
     setError("")
-    setSuccess("")
 
     try {
       // Update Firebase Auth profile
@@ -136,11 +167,11 @@ export default function ProfilePage() {
         }
       }
 
-      setSuccess("Profile updated successfully!")
+      const fieldName = editField === 'name' ? 'Name' : editField === 'phone' ? 'Phone number' : 'Profile'
+      showToast(`${fieldName} updated successfully! 🎉`)
       setShowEditModal(false)
-      setTimeout(() => setSuccess(""), 3000)
     } catch (error: any) {
-      setError(error.message || "Failed to update profile")
+      showToast(error.message || "Failed to update profile", 'error')
     } finally {
       setIsUpdating(false)
     }
@@ -150,18 +181,17 @@ export default function ProfilePage() {
     if (!user || !user.email) return
 
     if (formData.newPassword !== formData.confirmPassword) {
-      setError("New passwords don't match")
+      showToast("New passwords don't match", 'error')
       return
     }
 
     if (formData.newPassword.length < 6) {
-      setError("Password must be at least 6 characters")
+      showToast("Password must be at least 6 characters", 'error')
       return
     }
 
     setIsUpdating(true)
     setError("")
-    setSuccess("")
 
     try {
       // Re-authenticate user first
@@ -171,15 +201,14 @@ export default function ProfilePage() {
       // Update password
       await updatePassword(user, formData.newPassword)
 
-      setSuccess("Password updated successfully!")
+      showToast("Password updated successfully! 🔒")
       setShowPasswordModal(false)
       setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }))
-      setTimeout(() => setSuccess(""), 3000)
     } catch (error: any) {
       if (error.code === 'auth/wrong-password') {
-        setError("Current password is incorrect")
+        showToast("Current password is incorrect", 'error')
       } else {
-        setError(error.message || "Failed to update password")
+        showToast(error.message || "Failed to update password", 'error')
       }
     } finally {
       setIsUpdating(false)
@@ -202,7 +231,6 @@ export default function ProfilePage() {
     setEditField(field)
     setShowEditModal(true)
     setError("")
-    setSuccess("")
   }
 
   // Get the profile image to display
@@ -215,10 +243,27 @@ export default function ProfilePage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
+        {/* Toast Notification */}
+        <ToastNotification
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={hideToast}
+          type={toast.type}
+          duration={3000}
+        />
+
         {/* Professional Loading Overlay */}
         {(isLoading || isUpdating) && (
           <PageLoader animationData={animation} size="xl" overlay={true} />
         )}
+
+        {/* Image Cropper Modal */}
+        <ImageCropper
+          imageSrc={selectedImageForCrop}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+          isOpen={showImageCropper}
+        />
 
         {/* Header */}
         <div className="flex items-center justify-between p-4 pt-safe-top border-b border-slate-700/30">
@@ -233,16 +278,10 @@ export default function ProfilePage() {
         </div>
 
         <div className="p-4 space-y-6">
-          {/* Success/Error Messages */}
+          {/* Error Messages */}
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
               <p className="text-red-400 text-sm text-center">{error}</p>
-            </div>
-          )}
-
-          {success && (
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
-              <p className="text-green-400 text-sm text-center">{success}</p>
             </div>
           )}
 
