@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX } from "lucide-react"
+import { ArrowLeft, Shield, ShieldCheck, Users, Search, Crown, UserCheck, UserX, Wifi, WifiOff } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useAdmin } from "@/hooks/use-admin"
-import { getAllUsers, makeUserAdmin, removeUserAdmin } from "@/lib/admin"
+import { getAllUsers, makeUserAdmin, removeUserAdmin, checkNetworkStatus } from "@/lib/admin"
 import { AdminUser } from "@/types/admin"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
 import PageLoader from "@/components/ui/page-loader"
@@ -13,7 +13,7 @@ import ToastNotification from "@/components/ui/toast-notification"
 
 export default function AdminUsersPage() {
   const { user } = useAuth()
-  const { isAdmin, isLoading: adminLoading } = useAdmin()
+  const { isAdmin, isLoading: adminLoading, error: adminError } = useAdmin()
   const router = useRouter()
   const { animation } = useLoadingAnimation()
   
@@ -22,6 +22,7 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
   
   // Toast state
   const [toast, setToast] = useState({
@@ -38,12 +39,32 @@ export default function AdminUsersPage() {
     setToast(prev => ({ ...prev, isVisible: false }))
   }
 
+  // Monitor network status
+  useEffect(() => {
+    const updateNetworkStatus = () => {
+      const online = checkNetworkStatus()
+      setIsOnline(online)
+      if (!online) {
+        showToast("You're offline. Using cached data.", 'info')
+      }
+    }
+
+    updateNetworkStatus()
+    window.addEventListener('online', updateNetworkStatus)
+    window.addEventListener('offline', updateNetworkStatus)
+
+    return () => {
+      window.removeEventListener('online', updateNetworkStatus)
+      window.removeEventListener('offline', updateNetworkStatus)
+    }
+  }, [])
+
   // Redirect if not admin
   useEffect(() => {
-    if (!adminLoading && !isAdmin) {
+    if (!adminLoading && !isAdmin && !adminError) {
       router.push("/home")
     }
-  }, [isAdmin, adminLoading, router])
+  }, [isAdmin, adminLoading, adminError, router])
 
   // Load users
   useEffect(() => {
@@ -70,9 +91,16 @@ export default function AdminUsersPage() {
       setIsLoading(true)
       const allUsers = await getAllUsers()
       setUsers(allUsers)
-    } catch (error) {
+      
+      if (allUsers.length === 0 && !isOnline) {
+        showToast("No cached user data available", 'info')
+      }
+    } catch (error: any) {
       console.error("Error loading users:", error)
-      showToast("Failed to load users", 'error')
+      showToast(
+        isOnline ? "Failed to load users" : "Using cached data due to connection issues", 
+        isOnline ? 'error' : 'info'
+      )
     } finally {
       setIsLoading(false)
     }
@@ -81,6 +109,11 @@ export default function AdminUsersPage() {
   const handleToggleAdmin = async (userId: string, currentAdminStatus: boolean) => {
     if (userId === user?.uid) {
       showToast("You cannot change your own admin status", 'error')
+      return
+    }
+
+    if (!isOnline) {
+      showToast("Cannot modify admin status while offline", 'error')
       return
     }
 
@@ -97,9 +130,14 @@ export default function AdminUsersPage() {
       
       // Reload users
       await loadUsers()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating admin status:", error)
-      showToast("Failed to update admin status", 'error')
+      showToast(
+        error.message.includes('offline') || error.code === 'unavailable'
+          ? "Cannot update admin status while offline"
+          : "Failed to update admin status", 
+        'error'
+      )
     } finally {
       setIsUpdating(null)
     }
@@ -109,7 +147,7 @@ export default function AdminUsersPage() {
     return <PageLoader animationData={animation} size="xl" />
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !adminError) {
     return null // Will redirect
   }
 
@@ -124,7 +162,7 @@ export default function AdminUsersPage() {
         isVisible={toast.isVisible}
         onClose={hideToast}
         type={toast.type}
-        duration={3000}
+        duration={4000}
       />
 
       {/* Header */}
@@ -135,11 +173,34 @@ export default function AdminUsersPage() {
         >
           <ArrowLeft className="w-6 h-6 text-white" />
         </button>
-        <h1 className="text-xl font-bold text-white">User Management</h1>
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold text-white mr-3">User Management</h1>
+          {/* Network Status Indicator */}
+          <div className={`p-1 rounded-full ${isOnline ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+            {isOnline ? (
+              <Wifi className="w-4 h-4 text-green-400" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-red-400" />
+            )}
+          </div>
+        </div>
         <div className="w-10" />
       </div>
 
       <div className="p-4 space-y-6">
+        {/* Network Status Banner */}
+        {!isOnline && (
+          <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
+            <div className="flex items-center">
+              <WifiOff className="w-5 h-5 text-orange-400 mr-2" />
+              <div>
+                <p className="text-orange-400 font-medium text-sm">Offline Mode</p>
+                <p className="text-orange-300 text-xs">Showing cached data. Admin changes disabled.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-2xl p-4 border border-slate-600/30">
@@ -179,6 +240,21 @@ export default function AdminUsersPage() {
           />
         </div>
 
+        {/* Admin Access Info */}
+        <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
+          <div className="flex items-start">
+            <Shield className="w-5 h-5 text-cyan-400 mr-3 mt-0.5" />
+            <div>
+              <p className="text-cyan-400 font-medium text-sm mb-1">Admin Panel Access</p>
+              <p className="text-slate-300 text-xs leading-relaxed">
+                Direct URL: <code className="bg-slate-800/50 px-2 py-1 rounded text-cyan-300">
+                  {window.location.origin}/admin/users
+                </code>
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Administrators Section */}
         {adminUsers.length > 0 && (
           <div>
@@ -193,6 +269,7 @@ export default function AdminUsersPage() {
                   user={adminUser}
                   currentUserId={user?.uid}
                   isUpdating={isUpdating === adminUser.uid}
+                  isOnline={isOnline}
                   onToggleAdmin={handleToggleAdmin}
                 />
               ))}
@@ -213,6 +290,7 @@ export default function AdminUsersPage() {
                 user={regularUser}
                 currentUserId={user?.uid}
                 isUpdating={isUpdating === regularUser.uid}
+                isOnline={isOnline}
                 onToggleAdmin={handleToggleAdmin}
               />
             ))}
@@ -222,7 +300,9 @@ export default function AdminUsersPage() {
         {filteredUsers.length === 0 && !isLoading && (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400">No users found</p>
+            <p className="text-slate-400">
+              {isOnline ? "No users found" : "No cached user data available"}
+            </p>
           </div>
         )}
       </div>
@@ -234,10 +314,11 @@ interface UserCardProps {
   user: AdminUser
   currentUserId?: string
   isUpdating: boolean
+  isOnline: boolean
   onToggleAdmin: (userId: string, currentStatus: boolean) => void
 }
 
-function UserCard({ user, currentUserId, isUpdating, onToggleAdmin }: UserCardProps) {
+function UserCard({ user, currentUserId, isUpdating, isOnline, onToggleAdmin }: UserCardProps) {
   const isCurrentUser = user.uid === currentUserId
 
   return (
@@ -277,12 +358,13 @@ function UserCard({ user, currentUserId, isUpdating, onToggleAdmin }: UserCardPr
 
         <button
           onClick={() => onToggleAdmin(user.uid, user.isAdmin)}
-          disabled={isUpdating || isCurrentUser}
+          disabled={isUpdating || isCurrentUser || !isOnline}
           className={`p-3 rounded-xl transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
             user.isAdmin
               ? "bg-red-600/20 hover:bg-red-600/30 text-red-400"
               : "bg-purple-600/20 hover:bg-purple-600/30 text-purple-400"
           }`}
+          title={!isOnline ? "Offline - Cannot modify admin status" : ""}
         >
           {isUpdating ? (
             <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
