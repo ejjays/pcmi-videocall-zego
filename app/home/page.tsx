@@ -4,16 +4,41 @@ import Link from "next/link"
 import Header from "@/components/header"
 import BottomNav from "@/components/bottom-nav"
 import ProtectedRoute from "@/components/protected-route"
+import AdminOnlyMessage from "@/components/admin-only-message"
 import { useAuth } from "@/contexts/auth-context"
-import { Video, Plus, Calendar, ChevronRight } from "lucide-react"
+import { useAdmin, useMeetingStatus } from "@/hooks/use-admin"
+import { startMeeting, FIXED_ROOM_ID } from "@/lib/admin"
+import { Video, Plus, Calendar, ChevronRight, Users, Settings, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { useLoadingAnimation } from "@/hooks/use-loading-animation"
+import PageLoader from "@/components/ui/page-loader"
+import ToastNotification from "@/components/ui/toast-notification"
 
 export default function HomeScreen() {
   const { user } = useAuth()
+  const { isAdmin, isLoading: adminLoading } = useAdmin()
+  const { meetingStatus, isLoading: meetingLoading } = useMeetingStatus()
   const router = useRouter()
+  const { animation } = useLoadingAnimation()
+  
+  const [showAdminMessage, setShowAdminMessage] = useState(false)
+  const [isStartingMeeting, setIsStartingMeeting] = useState(false)
+  
+  // Toast state
+  const [toast, setToast] = useState({
+    isVisible: false,
+    message: "",
+    type: 'success' as 'success' | 'error' | 'info'
+  })
 
-  // Fixed meeting room ID - everyone joins the same room
-  const FIXED_ROOM_ID = "kamustahan01"
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ isVisible: true, message, type })
+  }
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, isVisible: false }))
+  }
 
   const upcomingMeetings = [
     {
@@ -42,9 +67,68 @@ export default function HomeScreen() {
     },
   ]
 
+  const handleNewMeeting = async () => {
+    if (!isAdmin) {
+      setShowAdminMessage(true)
+      return
+    }
+
+    if (!user) return
+
+    setIsStartingMeeting(true)
+    
+    try {
+      await startMeeting(user.uid, user.displayName || user.email || "Admin")
+      showToast("Meeting started successfully! 🎉", 'success')
+      
+      // Navigate to meeting after a short delay
+      setTimeout(() => {
+        router.push(`/meeting?roomId=${FIXED_ROOM_ID}`)
+      }, 1000)
+    } catch (error) {
+      console.error("Error starting meeting:", error)
+      showToast("Failed to start meeting", 'error')
+      setIsStartingMeeting(false)
+    }
+  }
+
+  const handleJoinMeeting = () => {
+    if (meetingStatus?.isActive) {
+      router.push(`/meeting?roomId=${FIXED_ROOM_ID}`)
+    } else {
+      router.push("/join")
+    }
+  }
+
+  if (showAdminMessage) {
+    return <AdminOnlyMessage />
+  }
+
+  if (adminLoading || meetingLoading) {
+    return (
+      <ProtectedRoute>
+        <PageLoader animationData={animation} size="xl" />
+      </ProtectedRoute>
+    )
+  }
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 animate-fadeIn">
+        {/* Toast Notification */}
+        <ToastNotification
+          message={toast.message}
+          isVisible={toast.isVisible}
+          onClose={hideToast}
+          type={toast.type}
+          duration={3000}
+        />
+
+        {/* Loading Overlay */}
+        {isStartingMeeting && (
+          <PageLoader animationData={animation} size="xl" overlay={true} />
+        )}
+
         <Header />
 
         <main className="px-4 py-6 pb-24">
@@ -54,16 +138,41 @@ export default function HomeScreen() {
               Welcome back, {user?.displayName?.split(" ")[0] || "User"}! 👋
             </h1>
             <p className="text-slate-300">Ready for the Word of God?</p>
+            {isAdmin && (
+              <div className="mt-2 flex items-center">
+                <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
+                <span className="text-purple-400 text-sm font-medium">Administrator</span>
+              </div>
+            )}
           </div>
+
+          {/* Admin Panel Link */}
+          {isAdmin && (
+            <Link
+              href="/admin/users"
+              className="block w-full bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl mb-6"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-3 backdrop-blur-sm">
+                    <Settings className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Admin Panel</h3>
+                    <p className="text-white/80 text-sm">Manage users and permissions</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-6 h-6 text-white/60" />
+              </div>
+            </Link>
+          )}
 
           {/* Quick Actions */}
           <div className="space-y-4 mb-8">
             <button
-              onClick={() => {
-                // Always use the same fixed room ID
-                router.push(`/meeting?roomId=${FIXED_ROOM_ID}`)
-              }}
-              className="block w-full bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl"
+              onClick={handleNewMeeting}
+              disabled={isStartingMeeting}
+              className="block w-full bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl disabled:opacity-50"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -71,32 +180,81 @@ export default function HomeScreen() {
                     <Video className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">New Meeting</h3>
-                    <p className="text-white/80 text-sm">Join the main meeting room</p>
+                    <h3 className="text-lg font-semibold text-white">
+                      {isAdmin ? "Start Meeting" : "New Meeting"}
+                    </h3>
+                    <p className="text-white/80 text-sm">
+                      {isAdmin ? "Start the main meeting room" : "Join the main meeting room"}
+                    </p>
                   </div>
                 </div>
                 <ChevronRight className="w-6 h-6 text-white/60" />
               </div>
             </button>
 
-            <Link
-              href="/join"
-              className="block w-full bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600/30 rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:from-slate-700 hover:to-slate-600"
+            <button
+              onClick={handleJoinMeeting}
+              className={`block w-full rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation border ${
+                meetingStatus?.isActive
+                  ? "bg-gradient-to-r from-emerald-500 to-cyan-500 shadow-emerald-500/25 animate-pulse border-emerald-400/50"
+                  : "bg-gradient-to-br from-slate-800 to-slate-700 border-slate-600/30 hover:from-slate-700 hover:to-slate-600"
+              }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center mr-4">
-                    <Plus className="w-6 h-6 text-white" />
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 backdrop-blur-sm ${
+                    meetingStatus?.isActive
+                      ? "bg-white/20"
+                      : "bg-gradient-to-r from-emerald-500 to-cyan-500"
+                  }`}>
+                    {meetingStatus?.isActive ? (
+                      <Sparkles className="w-6 h-6 text-white" />
+                    ) : (
+                      <Plus className="w-6 h-6 text-white" />
+                    )}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">Join a Meeting</h3>
-                    <p className="text-slate-300 text-sm">Enter meeting ID: {FIXED_ROOM_ID}</p>
+                    <h3 className="text-lg font-semibold text-white">
+                      {meetingStatus?.isActive ? "Join Live Meeting" : "Join Meeting"}
+                    </h3>
+                    <p className={`text-sm ${
+                      meetingStatus?.isActive ? "text-white/80" : "text-slate-300"
+                    }`}>
+                      {meetingStatus?.isActive 
+                        ? `${meetingStatus.participantCount} people joined • Room: ${FIXED_ROOM_ID}`
+                        : `Enter meeting ID: ${FIXED_ROOM_ID}`
+                      }
+                    </p>
                   </div>
                 </div>
-                <ChevronRight className="w-6 h-6 text-slate-400" />
+                <div className="flex items-center">
+                  {meetingStatus?.isActive && (
+                    <div className="w-3 h-3 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                  )}
+                  <ChevronRight className={`w-6 h-6 ${
+                    meetingStatus?.isActive ? "text-white/60" : "text-slate-400"
+                  }`} />
+                </div>
               </div>
-            </Link>
+            </button>
           </div>
+
+          {/* Meeting Status Info */}
+          {meetingStatus && (
+            <div className="mb-6 p-4 bg-slate-800/30 rounded-xl border border-slate-600/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white font-medium">Meeting Status</p>
+                  <p className="text-slate-400 text-sm">
+                    {meetingStatus.isActive ? "Live meeting in progress" : "No active meeting"}
+                  </p>
+                </div>
+                <div className={`w-3 h-3 rounded-full ${
+                  meetingStatus.isActive ? "bg-green-500 animate-pulse" : "bg-gray-500"
+                }`}></div>
+              </div>
+            </div>
+          )}
 
           {/* Upcoming Meetings */}
           <div>
@@ -125,12 +283,12 @@ export default function HomeScreen() {
                     </div>
 
                     {meeting.canStart ? (
-                      <Link
-                        href={`/meeting?roomId=${FIXED_ROOM_ID}`}
+                      <button
+                        onClick={() => router.push(`/meeting?roomId=${FIXED_ROOM_ID}`)}
                         className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-white px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 active:scale-95 touch-manipulation shadow-lg hover:shadow-xl"
                       >
                         Start
-                      </Link>
+                      </button>
                     ) : (
                       <button className="bg-slate-700/50 text-slate-300 px-4 py-2 rounded-xl font-medium text-sm border border-slate-600/30">
                         Details

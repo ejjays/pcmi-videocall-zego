@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { updateParticipantCount, endMeeting, FIXED_ROOM_ID } from "@/lib/admin"
 import ProtectedRoute from "@/components/protected-route"
 import MeetingPreparation from "@/components/meeting-preparation"
 import RoomShareModal from "@/components/room-share-modal"
@@ -19,15 +20,15 @@ export default function MeetingScreen() {
   const zegoRef = useRef<any>(null)
   const initializationRef = useRef<boolean>(false)
   const isLeavingRef = useRef<boolean>(false)
+  const participantCountRef = useRef<number>(0)
+  
   const [roomId, setRoomId] = useState<string>("")
   const [showPreparation, setShowPreparation] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
   const [isInitializing, setIsInitializing] = useState(false)
   const [error, setError] = useState<string>("")
   const [showShareModal, setShowShareModal] = useState(false)
-  const [meetingSettings, setMeetingSettings] = useState<{ video: boolean; audio: boolean; mirror: boolean } | null>(
-    null,
-  )
+  const [meetingSettings, setMeetingSettings] = useState<{ video: boolean; audio: boolean; mirror: boolean } | null>(null)
   const { animation } = useLoadingAnimation()
 
   useEffect(() => {
@@ -35,9 +36,9 @@ export default function MeetingScreen() {
     if (urlRoomId) {
       setRoomId(urlRoomId)
     } else {
-      const newRoomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      setRoomId(newRoomId)
-      const newUrl = `/meeting?roomId=${newRoomId}`
+      // Always use the fixed room ID
+      setRoomId(FIXED_ROOM_ID)
+      const newUrl = `/meeting?roomId=${FIXED_ROOM_ID}`
       window.history.replaceState({}, "", newUrl)
     }
   }, [searchParams])
@@ -57,7 +58,7 @@ export default function MeetingScreen() {
     }
   }, [showPreparation, meetingSettings, isInitializing])
 
-  // 🪞 Apply mirror effect when connected
+  // Apply mirror effect when connected
   useEffect(() => {
     if (isConnected && meetingSettings?.mirror && containerRef.current) {
       applyMirrorEffect()
@@ -66,12 +67,10 @@ export default function MeetingScreen() {
 
   const applyMirrorEffect = () => {
     try {
-      // Find all video elements in the ZegoCloud container
       const videoElements = containerRef.current?.querySelectorAll("video")
 
       if (videoElements) {
         videoElements.forEach((video) => {
-          // Apply mirror effect only to the local video
           const isLocalVideo =
             video.getAttribute("data-local") === "true" ||
             video.closest('[data-local="true"]') ||
@@ -84,7 +83,6 @@ export default function MeetingScreen() {
         })
       }
 
-      // Also try to find video elements with common ZegoCloud classes
       const zegoVideoElements = containerRef.current?.querySelectorAll(
         '[class*="video"], [class*="local"], [class*="self"], video',
       )
@@ -104,7 +102,6 @@ export default function MeetingScreen() {
   }
 
   const initializeZegoCloud = async (settings: { video: boolean; audio: boolean; mirror: boolean }) => {
-    // Prevent duplicate initialization
     if (isInitializing || initializationRef.current || zegoRef.current) {
       console.log("Already initializing or initialized, skipping...")
       return
@@ -115,17 +112,14 @@ export default function MeetingScreen() {
     console.log("Starting ZegoCloud initialization with settings:", settings)
 
     try {
-      // Check if user is available
       if (!user) {
         throw new Error("User not authenticated. Please sign in again.")
       }
 
-      // Check if roomId is available
       if (!roomId) {
         throw new Error("Room ID is missing. Please try again.")
       }
 
-      // Check environment variables
       const appIdStr = process.env.NEXT_PUBLIC_ZEGO_APP_ID
       const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET
 
@@ -138,7 +132,6 @@ export default function MeetingScreen() {
         throw new Error("Invalid ZegoCloud App ID configuration.")
       }
 
-      // Wait for container to be ready with retries
       let retries = 0
       const maxRetries = 10
       while (!containerRef.current && retries < maxRetries) {
@@ -174,10 +167,7 @@ export default function MeetingScreen() {
           mode: ZegoUIKitPrebuilt.GroupCall,
         },
 
-        // Disable pre-join view since we have our custom one
         showPreJoinView: false,
-
-        // Enable all built-in features for the actual meeting
         showMyCameraToggleButton: true,
         showMyMicrophoneToggleButton: true,
         showAudioVideoSettingsButton: true,
@@ -189,19 +179,14 @@ export default function MeetingScreen() {
         showRoomTimer: false,
         showRemoveUserButton: false,
 
-        // Video settings - use the settings from preparation
         turnOnCameraWhenJoining: settings.video,
         turnOnMicrophoneWhenJoining: settings.audio,
         useFrontFacingCamera: true,
 
-        // Start with no mirror - we'll handle it manually based on user preference
         videoMirror: false,
-
-        // Video quality and orientation
         videoResolution: "720p",
         videoOrientation: "portrait",
 
-        // Layout settings
         layout: "Auto",
         maxUsers: 10,
         showFullscreenButton: true,
@@ -209,17 +194,18 @@ export default function MeetingScreen() {
         showNonVideoUser: true,
         showOnlyAudioUser: true,
 
-        // Clean avatar approach - let ZegoCloud handle it naturally
         userAvatarUrl: user.photoURL || undefined,
 
-        // Callbacks
         onJoinRoom: () => {
           console.log("Successfully joined room")
           setIsConnected(true)
           setError("")
           setIsInitializing(false)
+          
+          // Update participant count
+          participantCountRef.current = 1
+          updateParticipantCount(1).catch(console.error)
 
-          // Apply mirror effect after a short delay to ensure video is loaded
           setTimeout(() => {
             if (settings.mirror) {
               applyMirrorEffect()
@@ -235,6 +221,10 @@ export default function MeetingScreen() {
           }
           isLeavingRef.current = true
 
+          // Update participant count
+          const newCount = Math.max(0, participantCountRef.current - 1)
+          updateParticipantCount(newCount).catch(console.error)
+
           zegoRef.current = null
           initializationRef.current = false
 
@@ -245,7 +235,9 @@ export default function MeetingScreen() {
         },
         onUserJoin: (users: any[]) => {
           console.log("Users joined:", users)
-          // Reapply mirror effect when users join (in case DOM changes)
+          participantCountRef.current = users.length + 1 // +1 for current user
+          updateParticipantCount(participantCountRef.current).catch(console.error)
+          
           setTimeout(() => {
             if (settings.mirror) {
               applyMirrorEffect()
@@ -254,6 +246,8 @@ export default function MeetingScreen() {
         },
         onUserLeave: (users: any[]) => {
           console.log("Users left:", users)
+          participantCountRef.current = users.length + 1 // +1 for current user
+          updateParticipantCount(participantCountRef.current).catch(console.error)
         },
         onError: (error: any) => {
           console.error("ZegoCloud error:", error)
@@ -337,14 +331,9 @@ export default function MeetingScreen() {
     setShowPreparation(true)
   }
 
-  // 🎭 Handle custom reactions
   const handleSendReaction = (reaction: { emoji: string; userId: string; userName: string }) => {
     console.log("Sending reaction:", reaction)
 
-    // TODO: You can integrate this with ZegoCloud's messaging system
-    // to send reactions to other participants in real-time
-
-    // Example: Send as a custom message through ZegoCloud
     if (zegoRef.current && zegoRef.current.sendInRoomMessage) {
       const reactionMessage = {
         type: "reaction",
@@ -370,6 +359,11 @@ export default function MeetingScreen() {
         try {
           console.log("Cleaning up ZegoCloud instance")
           isLeavingRef.current = true
+          
+          // Update participant count before leaving
+          const newCount = Math.max(0, participantCountRef.current - 1)
+          updateParticipantCount(newCount).catch(console.error)
+          
           zegoRef.current.destroy()
         } catch (error) {
           console.warn("Error during ZegoCloud cleanup:", error)
@@ -432,7 +426,6 @@ export default function MeetingScreen() {
         />
       ) : (
         <div className="min-h-screen bg-black relative">
-          {/* ZegoCloud Video Container */}
           <div
             ref={containerRef}
             className="w-full h-screen"
@@ -442,12 +435,10 @@ export default function MeetingScreen() {
             }}
           />
 
-          {/* Professional Blurred Loading overlay while connecting */}
           {(isInitializing || !isConnected) && (
             <PageLoader animationData={animation} size="xl" overlay={true} />
           )}
 
-          {/* 🎭 CUSTOM REACTIONS OVERLAY */}
           {isConnected && (
             <CustomReactions
               roomId={roomId}
@@ -457,7 +448,6 @@ export default function MeetingScreen() {
             />
           )}
 
-          {/* Share button - Clean meeting interface */}
           {isConnected && (
             <button
               onClick={handleShare}
@@ -474,7 +464,6 @@ export default function MeetingScreen() {
             </button>
           )}
 
-          {/* Share Modal */}
           <RoomShareModal roomId={roomId} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
         </div>
       )}

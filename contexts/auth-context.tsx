@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: fullName,
           createdAt: new Date().toISOString(),
           status: "online",
+          isAdmin: false, // Default to non-admin
         })
         console.log("User document created in Firestore")
       } catch (error) {
@@ -119,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             photoURL: user.photoURL,
             createdAt: new Date().toISOString(),
             status: "online",
+            isAdmin: false, // Default to non-admin
           })
           console.log("Google user document created in Firestore")
         }
