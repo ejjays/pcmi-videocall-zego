@@ -1,18 +1,18 @@
 "use client"
 
-import { doc, updateDoc, collection, getDocs, setDoc, getDoc, onSnapshot, query, where, enableNetwork, disableNetwork } from "firebase/firestore"
+import { doc, updateDoc, collection, getDocs, setDoc, getDoc, onSnapshot, query, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { AdminUser, MeetingStatus } from "@/types/admin"
 
 // Fixed meeting room ID
 export const FIXED_ROOM_ID = "kamustahan01"
 
-// Optimized retry configuration - less aggressive
-const RETRY_ATTEMPTS = 2
-const RETRY_DELAY = 500
+// Simplified retry configuration
+const RETRY_ATTEMPTS = 1
+const RETRY_DELAY = 1000
 
-// Cache duration (5 minutes)
-const CACHE_DURATION = 5 * 60 * 1000
+// Cache duration (3 minutes)
+const CACHE_DURATION = 3 * 60 * 1000
 
 // Cache management
 interface CacheItem<T> {
@@ -21,11 +21,15 @@ interface CacheItem<T> {
 }
 
 function setCache<T>(key: string, data: T): void {
-  const cacheItem: CacheItem<T> = {
-    data,
-    timestamp: Date.now()
+  try {
+    const cacheItem: CacheItem<T> = {
+      data,
+      timestamp: Date.now()
+    }
+    localStorage.setItem(key, JSON.stringify(cacheItem))
+  } catch (error) {
+    console.warn('Failed to set cache:', error)
   }
-  localStorage.setItem(key, JSON.stringify(cacheItem))
 }
 
 function getCache<T>(key: string): T | null {
@@ -47,26 +51,21 @@ function getCache<T>(key: string): T | null {
   }
 }
 
-// Utility function to retry operations with exponential backoff
-async function retryOperation<T>(operation: () => Promise<T>, attempts = RETRY_ATTEMPTS): Promise<T> {
-  for (let i = 0; i < attempts; i++) {
-    try {
+// Simplified retry operation
+async function retryOperation<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error: any) {
+    // Only retry on network errors
+    if (error.code === 'unavailable' || error.message.includes('offline')) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
       return await operation()
-    } catch (error: any) {
-      if (i === attempts - 1) throw error
-      
-      // Only retry on network errors
-      if (error.code === 'unavailable' || error.message.includes('offline')) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)))
-      } else {
-        throw error // Don't retry on other errors
-      }
     }
+    throw error
   }
-  throw new Error('All retry attempts failed')
 }
 
-// Optimized admin status check with immediate cache return
+// Simplified admin status check
 export async function checkIsAdmin(userId: string): Promise<boolean> {
   if (!userId) return false
   
@@ -75,10 +74,6 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
   // Return cached value immediately if available
   const cached = getCache<boolean>(cacheKey)
   if (cached !== null) {
-    // Optionally refresh in background
-    if (db && navigator.onLine) {
-      setTimeout(() => refreshAdminStatus(userId), 100)
-    }
     return cached
   }
   
@@ -96,20 +91,7 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
   }
 }
 
-// Background refresh for admin status
-async function refreshAdminStatus(userId: string): Promise<void> {
-  if (!db || !navigator.onLine) return
-  
-  try {
-    const userDoc = await getDoc(doc(db, "users", userId))
-    const isAdmin = userDoc.exists() ? userDoc.data()?.isAdmin === true : false
-    setCache(`admin_status_${userId}`, isAdmin)
-  } catch (error) {
-    // Silently fail background refresh
-  }
-}
-
-// Make user admin with retry logic
+// Make user admin
 export async function makeUserAdmin(userId: string): Promise<void> {
   if (!db) throw new Error("Database not available")
   
@@ -124,7 +106,7 @@ export async function makeUserAdmin(userId: string): Promise<void> {
   setCache(`admin_status_${userId}`, true)
 }
 
-// Remove admin status with retry logic
+// Remove admin status
 export async function removeUserAdmin(userId: string): Promise<void> {
   if (!db) throw new Error("Database not available")
   
@@ -139,17 +121,13 @@ export async function removeUserAdmin(userId: string): Promise<void> {
   setCache(`admin_status_${userId}`, false)
 }
 
-// Optimized user fetching with immediate cache return
+// Get all users
 export async function getAllUsers(): Promise<AdminUser[]> {
   const cacheKey = 'all_users'
   
   // Return cached users immediately if available
   const cached = getCache<AdminUser[]>(cacheKey)
   if (cached !== null) {
-    // Optionally refresh in background
-    if (db && navigator.onLine) {
-      setTimeout(() => refreshUsers(), 100)
-    }
     return cached
   }
   
@@ -171,24 +149,7 @@ export async function getAllUsers(): Promise<AdminUser[]> {
   }
 }
 
-// Background refresh for users
-async function refreshUsers(): Promise<void> {
-  if (!db || !navigator.onLine) return
-  
-  try {
-    const usersSnapshot = await getDocs(collection(db, "users"))
-    const users = usersSnapshot.docs.map(doc => ({
-      uid: doc.id,
-      ...doc.data()
-    } as AdminUser))
-    
-    setCache('all_users', users)
-  } catch (error) {
-    // Silently fail background refresh
-  }
-}
-
-// Start meeting (admin only) with retry logic
+// Start meeting
 export async function startMeeting(adminUserId: string, adminName: string): Promise<void> {
   if (!db) throw new Error("Database not available")
   
@@ -208,7 +169,7 @@ export async function startMeeting(adminUserId: string, adminName: string): Prom
   setCache('meeting_status', meetingData)
 }
 
-// End meeting with retry logic
+// End meeting
 export async function endMeeting(): Promise<void> {
   if (!db) throw new Error("Database not available")
   
@@ -229,7 +190,7 @@ export async function endMeeting(): Promise<void> {
   }
 }
 
-// Update participant count with optimistic updates
+// Update participant count
 export async function updateParticipantCount(count: number): Promise<void> {
   const updateData = {
     participantCount: count,
@@ -252,7 +213,7 @@ export async function updateParticipantCount(count: number): Promise<void> {
   }
 }
 
-// Optimized meeting status listener with immediate cache return
+// Meeting status listener
 export function listenToMeetingStatus(callback: (status: MeetingStatus | null) => void): () => void {
   // Return cached data immediately
   const cached = getCache<MeetingStatus>('meeting_status')
@@ -264,7 +225,7 @@ export function listenToMeetingStatus(callback: (status: MeetingStatus | null) =
     return () => {}
   }
   
-  // Set up real-time listener with error handling
+  // Set up real-time listener
   const unsubscribe = onSnapshot(
     doc(db, "meetings", FIXED_ROOM_ID), 
     (doc) => {
@@ -279,24 +240,19 @@ export function listenToMeetingStatus(callback: (status: MeetingStatus | null) =
     }, 
     (error) => {
       console.warn("Meeting status listener error:", error.message)
-      // Don't call callback on error to avoid overriding cached data
     }
   )
   
   return unsubscribe
 }
 
-// Optimized meeting status getter with immediate cache return
+// Get meeting status
 export async function getMeetingStatus(): Promise<MeetingStatus | null> {
   const cacheKey = 'meeting_status'
   
   // Return cached value immediately if available
   const cached = getCache<MeetingStatus>(cacheKey)
   if (cached !== null) {
-    // Optionally refresh in background
-    if (db && navigator.onLine) {
-      setTimeout(() => refreshMeetingStatus(), 100)
-    }
     return cached
   }
   
@@ -317,29 +273,13 @@ export async function getMeetingStatus(): Promise<MeetingStatus | null> {
   }
 }
 
-// Background refresh for meeting status
-async function refreshMeetingStatus(): Promise<void> {
-  if (!db || !navigator.onLine) return
-  
-  try {
-    const meetingDoc = await getDoc(doc(db, "meetings", FIXED_ROOM_ID))
-    if (meetingDoc.exists()) {
-      const status = meetingDoc.data() as MeetingStatus
-      setCache('meeting_status', status)
-    }
-  } catch (error) {
-    // Silently fail background refresh
-  }
-}
-
 // Network status checker
 export function checkNetworkStatus(): boolean {
   return navigator.onLine
 }
 
-// Lightweight offline support initialization
+// Initialize offline support
 export function initializeOfflineSupport() {
-  // Only set up basic event listeners
   window.addEventListener('online', () => {
     console.log('Network connection restored')
   })

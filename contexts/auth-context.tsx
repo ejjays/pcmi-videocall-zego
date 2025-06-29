@@ -44,13 +44,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (user) => {
         console.log("Auth state changed:", user ? `User: ${user.email}` : "No user")
         
-        if (user) {
-          // Ensure user document exists in Firestore
-          await ensureUserDocument(user)
-        }
-        
+        // Set user immediately without waiting for Firestore operations
         setUser(user)
         setLoading(false)
+        
+        // Handle Firestore operations in background (non-blocking)
+        if (user) {
+          ensureUserDocument(user).catch(error => {
+            console.warn("Background user document creation failed:", error)
+          })
+        }
       },
       (error) => {
         console.error("Auth state change error:", error)
@@ -58,11 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     )
 
-    // Fallback timeout
+    // Shorter fallback timeout
     const timeout = setTimeout(() => {
       console.warn("Auth loading timeout - forcing loading to false")
       setLoading(false)
-    }, 3000)
+    }, 2000)
 
     return () => {
       unsubscribe()
@@ -70,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Ensure user document exists in Firestore
+  // Ensure user document exists in Firestore (non-blocking background operation)
   const ensureUserDocument = async (user: User) => {
     if (!db) {
       console.warn("Firestore not available, skipping user document creation")
@@ -114,8 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await signInWithEmailAndPassword(auth, email, password)
     console.log("Sign in successful:", result.user.uid)
     
-    // Ensure user document exists
-    await ensureUserDocument(result.user)
+    // Don't wait for Firestore operations - they happen in background
+    ensureUserDocument(result.user).catch(console.warn)
   }
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -127,23 +130,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("Updating user profile...")
     await updateProfile(user, { displayName: fullName })
 
-    // Create Firestore document
+    // Create Firestore document in background (non-blocking)
     if (db) {
-      try {
-        await setDoc(doc(db, "users", user.uid), {
-          uid: user.uid,
-          email: user.email,
-          displayName: fullName,
-          photoURL: null,
-          createdAt: new Date().toISOString(),
-          lastActive: new Date().toISOString(),
-          status: "online",
-          isAdmin: false, // Default to non-admin
-        })
+      setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        email: user.email,
+        displayName: fullName,
+        photoURL: null,
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString(),
+        status: "online",
+        isAdmin: false, // Default to non-admin
+      }).then(() => {
         console.log("✅ User document created in Firestore")
-      } catch (error) {
+      }).catch(error => {
         console.warn("Failed to create Firestore document:", error)
-      }
+      })
     }
 
     console.log("Sign up successful:", user.uid)
@@ -156,8 +158,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const provider = new GoogleAuthProvider()
     const { user } = await signInWithPopup(auth, provider)
 
-    // Ensure user document exists
-    await ensureUserDocument(user)
+    // Don't wait for Firestore operations - they happen in background
+    ensureUserDocument(user).catch(console.warn)
 
     console.log("Google sign in successful:", user.uid)
   }
@@ -165,16 +167,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (!auth) throw new Error("Firebase auth not initialized")
 
-    // Update user status to offline before signing out
+    // Update user status to offline before signing out (background operation)
     if (user && db) {
-      try {
-        await setDoc(doc(db, "users", user.uid), {
-          status: "offline",
-          lastActive: new Date().toISOString()
-        }, { merge: true })
-      } catch (error) {
+      setDoc(doc(db, "users", user.uid), {
+        status: "offline",
+        lastActive: new Date().toISOString()
+      }, { merge: true }).catch(error => {
         console.warn("Failed to update user status on logout:", error)
-      }
+      })
     }
 
     console.log("Signing out user")

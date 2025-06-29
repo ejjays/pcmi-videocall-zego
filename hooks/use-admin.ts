@@ -24,11 +24,10 @@ export function useAdmin() {
       return
     }
 
-    // Set loading to false immediately if we have cached data
     setIsLoading(true)
     setError(null)
     
-    // Check admin status (will return cached data immediately if available)
+    // Check admin status
     checkIsAdmin(user.uid)
       .then(adminStatus => {
         setIsAdmin(adminStatus)
@@ -52,20 +51,20 @@ export function useMeetingStatus() {
   useEffect(() => {
     setError(null)
     
-    // Set up listener (will return cached data immediately if available)
+    // Set up listener
     const unsubscribe = listenToMeetingStatus((status) => {
       setMeetingStatus(status)
       setIsLoading(false)
       setError(null)
     })
 
-    // Shorter timeout for better UX
+    // Timeout for better UX
     const timeout = setTimeout(() => {
       if (isLoading) {
         console.warn('Meeting status listener timeout')
         setIsLoading(false)
       }
-    }, 2000)
+    }, 3000)
 
     return () => {
       unsubscribe()
