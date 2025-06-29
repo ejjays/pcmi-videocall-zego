@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editField, setEditField] = useState<'name' | 'email' | 'phone'>('name')
+  const [profileImageData, setProfileImageData] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     displayName: user?.displayName || "",
@@ -42,35 +43,54 @@ export default function ProfilePage() {
     const file = event.target.files?.[0]
     if (!file || !user) return
 
+    // Validate file size (limit to 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image file size must be less than 5MB")
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError("Please select a valid image file")
+      return
+    }
+
     setIsUpdating(true)
     setError("")
     setSuccess("")
 
     try {
-      // Create a data URL for the image
+      // Create a data URL for local display
       const reader = new FileReader()
       reader.onload = async (e) => {
         const dataUrl = e.target?.result as string
         
-        // Update Firebase Auth profile
-        await updateProfile(user, {
-          photoURL: dataUrl
-        })
-
-        // Update Firestore if available
-        if (db) {
-          try {
+        // Store the image data locally for display
+        setProfileImageData(dataUrl)
+        
+        // For Firebase Auth, we'll use a placeholder URL or skip updating photoURL
+        // and rely on local storage for the profile image display
+        try {
+          // Update Firestore with the image data (if available)
+          if (db) {
             await updateDoc(doc(db, "users", user.uid), {
-              photoURL: dataUrl,
+              profileImageData: dataUrl,
               updatedAt: new Date().toISOString()
             })
-          } catch (error) {
-            console.warn("Failed to update Firestore:", error)
           }
-        }
 
-        setSuccess("Profile picture updated successfully!")
-        setTimeout(() => setSuccess(""), 3000)
+          // Store in localStorage as backup
+          localStorage.setItem(`profile_image_${user.uid}`, dataUrl)
+
+          setSuccess("Profile picture updated successfully!")
+          setTimeout(() => setSuccess(""), 3000)
+        } catch (error) {
+          console.warn("Failed to update profile image:", error)
+          // Still store locally even if Firestore fails
+          localStorage.setItem(`profile_image_${user.uid}`, dataUrl)
+          setSuccess("Profile picture updated locally!")
+          setTimeout(() => setSuccess(""), 3000)
+        }
       }
       reader.readAsDataURL(file)
     } catch (error: any) {
@@ -79,6 +99,16 @@ export default function ProfilePage() {
       setIsUpdating(false)
     }
   }
+
+  // Load profile image from localStorage on component mount
+  useState(() => {
+    if (user?.uid) {
+      const savedImage = localStorage.getItem(`profile_image_${user.uid}`)
+      if (savedImage) {
+        setProfileImageData(savedImage)
+      }
+    }
+  })
 
   const handleUpdateProfile = async () => {
     if (!user) return
@@ -175,6 +205,13 @@ export default function ProfilePage() {
     setSuccess("")
   }
 
+  // Get the profile image to display
+  const getProfileImage = () => {
+    if (profileImageData) return profileImageData
+    if (user?.photoURL && user.photoURL.startsWith('http')) return user.photoURL
+    return null
+  }
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
@@ -214,9 +251,9 @@ export default function ProfilePage() {
             <div className="flex flex-col items-center">
               <div className="relative">
                 <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-r from-slate-600 to-slate-700 flex items-center justify-center">
-                  {user?.photoURL ? (
+                  {getProfileImage() ? (
                     <img 
-                      src={user.photoURL} 
+                      src={getProfileImage()!} 
                       alt="Profile" 
                       className="w-full h-full object-cover"
                     />
