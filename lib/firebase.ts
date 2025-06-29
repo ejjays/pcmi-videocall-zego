@@ -3,6 +3,7 @@
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
+import { getStorage } from "firebase/storage" // Add this import
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -35,9 +36,11 @@ try {
 // Initialize services with error handling
 export const auth = app ? getAuth(app) : null
 export const db = app ? getFirestore(app) : null
+export const storage = app ? getStorage(app) : null
 
 // Log if services are available
 console.log("Firebase services:", {
   authAvailable: !!auth,
   dbAvailable: !!db,
+  storageAvailable: !!storage, 
 })

@@ -135,17 +135,17 @@ export default function HomeScreen() {
               disabled={isStartingMeeting}
               className="block w-full bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl p-6 shadow-xl transition-all duration-200 active:scale-98 touch-manipulation hover:shadow-2xl disabled:opacity-50"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center flex-1">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4 backdrop-blur-sm shrink-0">
                     <Video className="w-6 h-6 text-white" />
                   </div>
-                  <div>
+                  <div className="text-left">
                     <h3 className="text-lg font-semibold text-white">Start Meeting</h3>
                     <p className="text-white/80 text-sm">Start the main meeting room</p>
                   </div>
                 </div>
-                <ChevronRight className="w-6 h-6 text-white/60" />
+                <ChevronRight className="w-6 h-6 text-white/60 ml-4" />
               </div>
             </button>
 
@@ -157,9 +157,9 @@ export default function HomeScreen() {
                   : "bg-gradient-to-br from-slate-800 to-slate-700 border-slate-600/30 hover:from-slate-700 hover:to-slate-600"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 backdrop-blur-sm ${
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center flex-1">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 backdrop-blur-sm shrink-0 ${
                     meetingStatus?.isActive
                       ? "bg-white/20"
                       : "bg-gradient-to-r from-emerald-500 to-cyan-500"
@@ -170,7 +170,7 @@ export default function HomeScreen() {
                       <Plus className="w-6 h-6 text-white" />
                     )}
                   </div>
-                  <div>
+                  <div className="text-left">
                     <h3 className="text-lg font-semibold text-white">
                       {meetingStatus?.isActive ? "Join Live Meeting" : "Join Meeting"}
                     </h3>
@@ -195,8 +195,7 @@ export default function HomeScreen() {
               </div>
             </button>
           </div>
-
-          {/* Meeting Status Info */}
+          
           {meetingStatus && (
             <div className="mb-6 p-4 bg-slate-800/30 rounded-xl border border-slate-600/20">
               <div className="flex items-center justify-between">
@@ -213,7 +212,6 @@ export default function HomeScreen() {
             </div>
           )}
 
-          {/* Upcoming Meetings */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white">Upcoming Meetings</h2>
@@ -230,7 +228,7 @@ export default function HomeScreen() {
                       <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl flex items-center justify-center mr-3">
                         <Calendar className="w-5 h-5 text-cyan-400" />
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 text-left">
                         <h3 className="font-semibold text-white">{meeting.title}</h3>
                         <p className="text-sm text-slate-300">
                           {meeting.date} • {meeting.time}

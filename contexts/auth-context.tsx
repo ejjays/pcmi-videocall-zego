@@ -23,6 +23,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName || user.email?.split("@")[0] || "User",
-          photoURL: user.photoURL || null,
+          photoURL: user.photoURL,
           createdAt: new Date().toISOString(),
           lastActive: new Date().toISOString(),
           status: "online",
@@ -107,7 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update last active time
         await setDoc(userDocRef, {
           lastActive: new Date().toISOString(),
-          status: "online"
+          status: "online",
+          photoURL: user.photoURL,
         }, { merge: true })
         console.log("✅ User last active time updated")
       }
@@ -188,6 +190,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("Sign out successful")
   }
 
+  const refreshUser = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+      const refreshedUser = auth.currentUser;
+      setUser(refreshedUser);
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -195,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signInWithGoogle,
     logout,
+    refreshUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

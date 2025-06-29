@@ -6,7 +6,8 @@ import { ArrowLeft, Camera, User, Mail, Phone, Lock, Shield, LogOut } from "luci
 import { useAuth } from "@/contexts/auth-context"
 import { updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
 import { doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { db, storage } from "@/lib/firebase" // Import storage
+import { ref, uploadString, getDownloadURL } from "firebase/storage" // Import storage functions
 import ProtectedRoute from "@/components/protected-route"
 import { useLoadingAnimation } from "@/hooks/use-loading-animation"
 import PageLoader from "@/components/ui/page-loader"
@@ -14,7 +15,7 @@ import ImageCropper from "@/components/ui/image-cropper"
 import ToastNotification from "@/components/ui/toast-notification"
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { animation } = useLoadingAnimation()
@@ -98,35 +99,43 @@ export default function ProfilePage() {
   const handleCropComplete = async (croppedImage: string) => {
     if (!user) return
 
-    console.log('Crop complete callback triggered')
-    setIsUpdating(true)
-    setShowImageCropper(false)
-
+    setIsUpdating(true);
+    setShowImageCropper(false);
+  
     try {
-      // Store the cropped image data locally for display
-      setProfileImageData(croppedImage)
+      // Create a reference to the storage location
+      const storageRef = ref(storage, `profile-pictures/${user.uid}`);
       
-      // Update Firestore with the image data (if available)
+      // Upload the image
+      await uploadString(storageRef, croppedImage, 'data_url');
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // This is the key: update the photoURL in Firebase Auth
+      await updateProfile(user, {
+        photoURL: downloadURL,
+      });
+  
+      // Also update Firestore to keep everything in sync
       if (db) {
         await updateDoc(doc(db, "users", user.uid), {
-          profileImageData: croppedImage,
-          updatedAt: new Date().toISOString()
-        })
+          photoURL: downloadURL,
+          updatedAt: new Date().toISOString(),
+        });
       }
-
-      // Store in localStorage as backup
-      localStorage.setItem(`profile_image_${user.uid}`, croppedImage)
-
-      showToast("Profile picture updated successfully! ✨")
-    } catch (error) {
-      console.warn("Failed to update profile image:", error)
-      // Still store locally even if Firestore fails
-      localStorage.setItem(`profile_image_${user.uid}`, croppedImage)
-      showToast("Profile picture updated locally! 📱")
+  
+      // Now, refresh the user state to get the updated photoURL
+      await refreshUser();
+  
+      showToast("Profile picture updated successfully! 脂");
+    } catch (error: any) {
+      console.warn("Failed to update profile image:", error);
+      showToast("Failed to update profile picture.", 'error');
     } finally {
-      setIsUpdating(false)
+      setIsUpdating(false);
     }
-  }
+  };
 
   const handleCropCancel = () => {
     console.log('Crop cancelled')
@@ -137,16 +146,6 @@ export default function ProfilePage() {
       fileInputRef.current.value = ""
     }
   }
-
-  // Load profile image from localStorage on component mount
-  useState(() => {
-    if (user?.uid) {
-      const savedImage = localStorage.getItem(`profile_image_${user.uid}`)
-      if (savedImage) {
-        setProfileImageData(savedImage)
-      }
-    }
-  })
 
   const handleUpdateProfile = async () => {
     if (!user) return
@@ -173,8 +172,10 @@ export default function ProfilePage() {
         }
       }
 
+      await refreshUser();
+
       const fieldName = editField === 'name' ? 'Name' : editField === 'phone' ? 'Phone number' : 'Profile'
-      showToast(`${fieldName} updated successfully! 🎉`)
+      showToast(`${fieldName} updated successfully! 脂`)
       setShowEditModal(false)
     } catch (error: any) {
       showToast(error.message || "Failed to update profile", 'error')
@@ -207,7 +208,7 @@ export default function ProfilePage() {
       // Update password
       await updatePassword(user, formData.newPassword)
 
-      showToast("Password updated successfully! 🔒")
+      showToast("Password updated successfully! 白")
       setShowPasswordModal(false)
       setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }))
     } catch (error: any) {
@@ -241,10 +242,8 @@ export default function ProfilePage() {
 
   // Get the profile image to display
   const getProfileImage = () => {
-    if (profileImageData) return profileImageData
-    if (user?.photoURL && user.photoURL.startsWith('http')) return user.photoURL
-    return null
-  }
+    return user?.photoURL || null;
+  };
 
   return (
     <ProtectedRoute>
@@ -444,7 +443,7 @@ export default function ProfilePage() {
           {/* Version Info */}
           <div className="text-center pt-6 pb-8">
             <p className="text-slate-500 text-sm">Version 2.1.0</p>
-            <p className="text-slate-500 text-xs mt-1">© 2024 PCMI</p>
+            <p className="text-slate-500 text-xs mt-1">ﾂｩ 2024 PCMI</p>
           </div>
         </div>
 
