@@ -178,8 +178,8 @@ export default function HomeScreen() {
                       meetingStatus?.isActive ? "text-white/80" : "text-slate-300"
                     }`}>
                       {meetingStatus?.isActive 
-                        ? `${meetingStatus.participantCount} people joined • Room: ${FIXED_ROOM_ID}`
-                        : `Enter meeting ID: ${FIXED_ROOM_ID}`
+                        ? `${meetingStatus.participantCount} people joined`
+                        : "Join an existing meeting"
                       }
                     </p>
                   </div>
@@ -207,7 +207,7 @@ export default function HomeScreen() {
                   </p>
                 </div>
                 <div className={`w-3 h-3 rounded-full ${
-                  meetingStatus.isActive ? "bg-green-500" : "bg-gray-500"
+                  meetingStatus.isActive ? "bg-green-500 animate-pulse" : "bg-gray-500"
                 }`}></div>
               </div>
             </div>
