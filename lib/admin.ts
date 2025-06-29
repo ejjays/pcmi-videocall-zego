@@ -48,15 +48,15 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
       return userDoc.exists() ? userDoc.data()?.isAdmin === true : false
     })
   } catch (error: any) {
-    console.error("Error checking admin status:", error)
-    
-    // Return cached value if available
+    // Check if cached value is available
     const cached = localStorage.getItem(`admin_status_${userId}`)
     if (cached) {
-      console.log('Using cached admin status')
+      console.warn("Network unavailable, using cached admin status:", error.message)
       return JSON.parse(cached)
     }
     
+    // Only log as error if no cached data is available
+    console.error("Error checking admin status:", error)
     return false
   }
 }
@@ -102,15 +102,15 @@ export async function getAllUsers(): Promise<AdminUser[]> {
       return users
     })
   } catch (error: any) {
-    console.error("Error fetching users:", error)
-    
-    // Return cached users if available
+    // Check if cached users are available
     const cached = localStorage.getItem('cached_users')
     if (cached) {
-      console.log('Using cached users data')
+      console.warn("Network unavailable, using cached users data:", error.message)
       return JSON.parse(cached)
     }
     
+    // Only log as error if no cached data is available
+    console.error("Error fetching users:", error)
     return []
   }
 }
@@ -247,15 +247,15 @@ export async function getMeetingStatus(): Promise<MeetingStatus | null> {
       return null
     })
   } catch (error: any) {
-    console.error("Error getting meeting status:", error)
-    
-    // Return cached data if available
+    // Check if cached data is available
     const cached = localStorage.getItem('meeting_status')
     if (cached) {
-      console.log('Using cached meeting status')
+      console.warn("Network unavailable, using cached meeting status:", error.message)
       return JSON.parse(cached)
     }
     
+    // Only log as error if no cached data is available
+    console.error("Error getting meeting status:", error)
     return null
   }
 }
