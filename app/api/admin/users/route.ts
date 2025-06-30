@@ -3,6 +3,14 @@ import { getAdminServices } from '@/lib/firebase-admin';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export async function GET(request: NextRequest) {
+  // --- Start of Debugging Code ---
+  console.log("--- VERCEL RUNTIME LOG: /api/admin/users GET ---");
+  console.log("NEXT_PUBLIC_FIREBASE_PROJECT_ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'Loaded' : 'MISSING!');
+  console.log("FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? 'Loaded' : 'MISSING!');
+  console.log("FIREBASE_PRIVATE_KEY_ID:", process.env.FIREBASE_PRIVATE_KEY_ID ? 'Loaded' : 'MISSING!');
+  console.log("FIREBASE_PRIVATE_KEY_BASE64:", process.env.FIREBASE_PRIVATE_KEY_BASE64 ? 'Loaded' : 'MISSING!');
+  // --- End of Debugging Code ---
+
   try {
     const { auth, db } = getAdminServices();
     const listUsersResult = await auth.listUsers();
@@ -44,6 +52,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    // --- Start of Debugging Code ---
+    console.log("--- VERCEL RUNTIME LOG: /api/admin/users POST ---");
+    console.log("NEXT_PUBLIC_FIREBASE_PROJECT_ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'Loaded' : 'MISSING!');
+    console.log("FIREBASE_CLIENT_EMAIL:", process.env.FIREBASE_CLIENT_EMAIL ? 'Loaded' : 'MISSING!');
+    console.log("FIREBASE_PRIVATE_KEY_ID:", process.env.FIREBASE_PRIVATE_KEY_ID ? 'Loaded' : 'MISSING!');
+    console.log("FIREBASE_PRIVATE_KEY_BASE64:", process.env.FIREBASE_PRIVATE_KEY_BASE64 ? 'Loaded' : 'MISSING!');
+    // --- End of Debugging Code ---
+
   try {
     const { auth, db } = getAdminServices();
     const { action, userId } = await request.json();
