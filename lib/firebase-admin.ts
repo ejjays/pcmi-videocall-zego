@@ -1,49 +1,58 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Decode the base64 private key
-const decodedPrivateKey = Buffer.from(
-  process.env.FIREBASE_PRIVATE_KEY_BASE64!,
-  'base64'
-).toString('ascii');
+// A single object to hold our initialized Firebase Admin services.
+const adminServices = (() => {
+  // Check if we're already initialized.
+  if (getApps().length > 0) {
+    const existingApp = getApps()[0];
+    return {
+      app: existingApp,
+      auth: getAuth(existingApp),
+      db: getFirestore(existingApp),
+      initialized: true,
+    };
+  }
 
-// Initialize Firebase Admin SDK
-let adminApp;
-try {
-  if (getApps().length === 0) {
+  // Check for all required environment variables.
+  const privateKeyBase64 = process.env.FIREBASE_PRIVATE_KEY_BASE64;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+  if (!privateKeyBase64 || !clientEmail || !projectId) {
+    console.warn('⚠️ Firebase Admin SDK not initialized: Missing one or more required environment variables.');
+    return { app: null, auth: null, db: null, initialized: false };
+  }
+  
+  try {
+    const decodedPrivateKey = Buffer.from(privateKeyBase64, 'base64').toString('ascii');
+
     const serviceAccount = {
-      type: "service_account",
-      project_id: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-      // Use the decoded private key here
-      private_key: decodedPrivateKey,
-      client_email: process.env.FIREBASE_CLIENT_EMAIL,
-      client_id: process.env.FIREBASE_CLIENT_ID,
-      auth_uri: "https://accounts.google.com/o/oauth2/auth",
-      token_uri: "https://oauth2.googleapis.com/token",
-      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-      client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`
+      projectId: projectId,
+      clientEmail: clientEmail,
+      privateKey: decodedPrivateKey,
     };
 
-    adminApp = initializeApp({
-      credential: cert(serviceAccount as any),
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    const app = initializeApp({
+      credential: cert(serviceAccount),
+      projectId: projectId,
     });
-    
-    console.log('✅ Firebase Admin SDK initialized');
-  } else {
-    adminApp = getApps()[0];
+
+    console.log('✅ Firebase Admin SDK initialized successfully.');
+
+    return {
+      app: app,
+      auth: getAuth(app),
+      db: getFirestore(app),
+      initialized: true,
+    };
+  } catch (error: any) {
+    console.error('❌ Firebase Admin SDK initialization failed:', error.message);
+    return { app: null, auth: null, db: null, initialized: false };
   }
-} catch (error) {
-  console.error('❌ Firebase Admin SDK initialization failed:', error);
-  adminApp = null;
-}
+})();
 
-export const adminAuth = adminApp ? getAuth(adminApp) : null;
-export const adminDb = adminApp ? getFirestore(adminApp) : null;
-
-console.log('Firebase Admin services:', {
-  authAvailable: !!adminAuth,
-  dbAvailable: !!adminDb,
-});
+export const adminAuth = adminServices.auth;
+export const adminDb = adminServices.db;
+export const isAdminInitialized = adminServices.initialized;
